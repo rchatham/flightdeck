@@ -1,0 +1,40 @@
+# FlightDeck — session progress log
+
+## Session 2026-07-06 — Price Watches & Alerts (the "tracking" half)
+
+Built end-to-end price watching:
+- models: PriceWatch + PriceAlert (app/models/watch.py) with rolling
+  alert-debounce state on the watch row
+- migration: alembic e3f8a12b90d4 (price_watches, price_alerts) — NOT yet
+  applied to a running DB this session (docker services were not started)
+- 🎯 Hook 4 (USER CONTRIBUTION, OPEN): evaluate_watch() in
+  app/services/alert_rules.py — alert-firing policy. Default only fires
+  TARGET_HIT with a simple debounce. 3 xfail tests in
+  tests/test_alert_rules.py encode PRICE_DROP / NEW_LOW / pct-debounce.
+- service: app/services/watches.py check_watch() — fan-out search, records
+  a price_history row (feeds Hook 2 timing analyzer), evaluates rule,
+  persists alert, auto-deactivates expired watches
+- worker: app/workers/watch_checker.py; beat every 6h at :30 of 3,9,15,21 UTC
+- API: /api/v1/watches (POST, GET, GET/{id}, DELETE/{id}, POST/{id}/check,
+  GET /alerts, POST /alerts/{id}/ack)
+- CLI: flightdeck watch add/list/rm/check/alerts/ack
+- APIClient gained a delete() method (app/cli/client.py)
+
+State: 67 passed, 7 xfailed. Lint: pre-existing violations only (B008/UP042
+style matches existing code; make lint was already failing before session).
+
+## Open items
+- 🎯 Hook 3 (USER CONTRIBUTION, OPEN since prior session):
+  score_hidden_fare_risk() in app/services/fare_risks.py — still default
+  stub, 4 xfail tests in tests/test_fare_risks.py
+- 🎯 Hook 4 (see above)
+- Repo is NOT a git repository — no version control yet
+- Migration e3f8a12b90d4 needs `make up && make migrate` to apply
+- Alert delivery is DB/CLI-only; no push channel (email/ntfy) yet
+- Possible next features: notification channel for alerts, award/points
+  search (PointsProgram model exists but unused), booking deep-link builder
+
+## Earlier sessions (reconstructed)
+- Multi-source search (Amadeus/Kiwi/SerpAPI) + dedup + ranking (Hook 1 done)
+- Timing analyzer + price-history scraper (Hook 2 done)
+- Hidden-fare discovery (Hook 3 stub open)

@@ -1,0 +1,77 @@
+{
+  "_comment": "Manual snapshot of major US points programs and their airline transfer partners. Refresh quarterly — bonuses change frequently. Sources: program websites as of 2026.",
+  "_schema": "Each program has airline partners with `ratio` (how many program points → 1 airline mile) and `bonus_pct` (current limited-time bonus, 0 if none).",
+  "programs": [
+    {
+      "program_name": "Chase Ultimate Rewards",
+      "card_name": "Sapphire Preferred / Reserve",
+      "transfer_partners": [
+        {"airline": "United MileagePlus", "iata": "UA", "ratio": "1:1", "bonus_pct": 0},
+        {"airline": "Air Canada Aeroplan", "iata": "AC", "ratio": "1:1", "bonus_pct": 0},
+        {"airline": "Air France/KLM Flying Blue", "iata": "AF", "ratio": "1:1", "bonus_pct": 0},
+        {"airline": "British Airways Avios", "iata": "BA", "ratio": "1:1", "bonus_pct": 0},
+        {"airline": "Iberia Avios", "iata": "IB", "ratio": "1:1", "bonus_pct": 0},
+        {"airline": "JetBlue TrueBlue", "iata": "B6", "ratio": "1:1", "bonus_pct": 0},
+        {"airline": "Singapore KrisFlyer", "iata": "SQ", "ratio": "1:1", "bonus_pct": 0},
+        {"airline": "Southwest Rapid Rewards", "iata": "WN", "ratio": "1:1", "bonus_pct": 0},
+        {"airline": "Virgin Atlantic Flying Club", "iata": "VS", "ratio": "1:1", "bonus_pct": 0},
+        {"airline": "Aer Lingus AerClub", "iata": "EI", "ratio": "1:1", "bonus_pct": 0},
+        {"airline": "Emirates Skywards", "iata": "EK", "ratio": "1:1", "bonus_pct": 0}
+      ]
+    },
+    {
+      "program_name": "American Express Membership Rewards",
+      "card_name": "Platinum / Gold / Green",
+      "transfer_partners": [
+        {"airline": "Delta SkyMiles", "iata": "DL", "ratio": "1:1", "bonus_pct": 0},
+        {"airline": "Air Canada Aeroplan", "iata": "AC", "ratio": "1:1", "bonus_pct": 0},
+        {"airline": "Air France/KLM Flying Blue", "iata": "AF", "ratio": "1:1", "bonus_pct": 0},
+        {"airline": "ANA Mileage Club", "iata": "NH", "ratio": "1:1", "bonus_pct": 0},
+        {"airline": "British Airways Avios", "iata": "BA", "ratio": "1:1", "bonus_pct": 0},
+        {"airline": "Cathay Pacific Asia Miles", "iata": "CX", "ratio": "1:1", "bonus_pct": 0},
+        {"airline": "Emirates Skywards", "iata": "EK", "ratio": "1:1", "bonus_pct": 0},
+        {"airline": "Hawaiian HawaiianMiles", "iata": "HA", "ratio": "1:1", "bonus_pct": 0},
+        {"airline": "Iberia Avios", "iata": "IB", "ratio": "1:1", "bonus_pct": 0},
+        {"airline": "JetBlue TrueBlue", "iata": "B6", "ratio": "5:4", "bonus_pct": 0},
+        {"airline": "Qantas Frequent Flyer", "iata": "QF", "ratio": "1:1", "bonus_pct": 0},
+        {"airline": "Qatar Privilege Club", "iata": "QR", "ratio": "1:1", "bonus_pct": 0},
+        {"airline": "Singapore KrisFlyer", "iata": "SQ", "ratio": "1:1", "bonus_pct": 0},
+        {"airline": "Virgin Atlantic Flying Club", "iata": "VS", "ratio": "1:1", "bonus_pct": 0}
+      ]
+    },
+    {
+      "program_name": "Citi ThankYou Rewards",
+      "card_name": "Premier / Strata Premier",
+      "transfer_partners": [
+        {"airline": "Air France/KLM Flying Blue", "iata": "AF", "ratio": "1:1", "bonus_pct": 0},
+        {"airline": "Avianca LifeMiles", "iata": "AV", "ratio": "1:1", "bonus_pct": 0},
+        {"airline": "Cathay Pacific Asia Miles", "iata": "CX", "ratio": "1:1", "bonus_pct": 0},
+        {"airline": "Emirates Skywards", "iata": "EK", "ratio": "1:1", "bonus_pct": 0},
+        {"airline": "Etihad Guest", "iata": "EY", "ratio": "1:1", "bonus_pct": 0},
+        {"airline": "JetBlue TrueBlue", "iata": "B6", "ratio": "1:1", "bonus_pct": 0},
+        {"airline": "Qantas Frequent Flyer", "iata": "QF", "ratio": "1:1", "bonus_pct": 0},
+        {"airline": "Qatar Privilege Club", "iata": "QR", "ratio": "1:1", "bonus_pct": 0},
+        {"airline": "Singapore KrisFlyer", "iata": "SQ", "ratio": "1:1", "bonus_pct": 0},
+        {"airline": "Turkish Miles&Smiles", "iata": "TK", "ratio": "1:1", "bonus_pct": 0},
+        {"airline": "Virgin Atlantic Flying Club", "iata": "VS", "ratio": "1:1", "bonus_pct": 0}
+      ]
+    },
+    {
+      "program_name": "Capital One Venture Miles",
+      "card_name": "Venture / Venture X",
+      "transfer_partners": [
+        {"airline": "Air Canada Aeroplan", "iata": "AC", "ratio": "1:1", "bonus_pct": 0},
+        {"airline": "Air France/KLM Flying Blue", "iata": "AF", "ratio": "1:1", "bonus_pct": 0},
+        {"airline": "Avianca LifeMiles", "iata": "AV", "ratio": "1:1", "bonus_pct": 0},
+        {"airline": "British Airways Avios", "iata": "BA", "ratio": "1:1", "bonus_pct": 0},
+        {"airline": "Cathay Pacific Asia Miles", "iata": "CX", "ratio": "1:1", "bonus_pct": 0},
+        {"airline": "Emirates Skywards", "iata": "EK", "ratio": "1:1", "bonus_pct": 0},
+        {"airline": "Etihad Guest", "iata": "EY", "ratio": "1:1", "bonus_pct": 0},
+        {"airline": "Qantas Frequent Flyer", "iata": "QF", "ratio": "1:1", "bonus_pct": 0},
+        {"airline": "Singapore KrisFlyer", "iata": "SQ", "ratio": "1:1", "bonus_pct": 0},
+        {"airline": "Turkish Miles&Smiles", "iata": "TK", "ratio": "1:1", "bonus_pct": 0},
+        {"airline": "Virgin Red", "iata": "VS", "ratio": "1:1", "bonus_pct": 0}
+      ]
+    }
+  ]
+}

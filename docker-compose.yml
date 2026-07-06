@@ -1,0 +1,34 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: flightdeck-postgres
+    environment:
+      POSTGRES_USER: flightdeck
+      POSTGRES_PASSWORD: flightdeck
+      POSTGRES_DB: flightdeck
+    ports:
+      - "5434:5432"
+    volumes:
+      - flightdeck_pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U flightdeck"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: flightdeck-redis
+    ports:
+      - "6381:6379"
+    volumes:
+      - flightdeck_redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  flightdeck_pg_data:
+  flightdeck_redis_data:
