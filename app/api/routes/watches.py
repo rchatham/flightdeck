@@ -7,6 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.api.schemas.booking import BookingLinkOut, BookingLinksResponse
 from app.api.schemas.watches import (
     AlertListResponse,
     AlertOut,
@@ -17,6 +18,7 @@ from app.api.schemas.watches import (
 )
 from app.db import get_session
 from app.models import PriceAlert, PriceWatch
+from app.services.booking import build_route_links
 from app.services.watches import check_watch
 
 router = APIRouter(prefix="/api/v1/watches", tags=["watches"])
@@ -103,6 +105,27 @@ async def delete_watch(
         raise HTTPException(status_code=404, detail="watch not found")
     await session.delete(watch)
     await session.commit()
+
+
+@router.get("/{watch_id}/booking", response_model=BookingLinksResponse)
+async def watch_booking_links(
+    watch_id: UUID, session: AsyncSession = Depends(get_session)
+) -> BookingLinksResponse:
+    """Where to book the watched trip — e.g. after an alert fires."""
+    watch = await session.get(PriceWatch, watch_id)
+    if watch is None:
+        raise HTTPException(status_code=404, detail="watch not found")
+    links = build_route_links(
+        watch.origin, watch.destination, watch.departure_date, watch.return_date
+    )
+    context = f"{watch.origin}→{watch.destination} on {watch.departure_date.isoformat()}"
+    if watch.last_price_usd is not None:
+        context += f" (last seen ${float(watch.last_price_usd):,.0f})"
+    return BookingLinksResponse(
+        context=context,
+        price_usd=watch.last_price_usd,
+        links=[BookingLinkOut(**vars(link)) for link in links],
+    )
 
 
 @router.post("/{watch_id}/check", response_model=CheckResponse)

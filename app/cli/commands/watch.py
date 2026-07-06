@@ -190,6 +190,21 @@ def watch_alerts_cmd(ctx, include_acknowledged, as_json):
     emit(safe_json(resp), as_json=as_json, render_human=_render_alerts)
 
 
+@watch_cmd.command("book", help="Show booking options for a watched trip.")
+@click.argument("watch_id")
+@click.option("--json", "as_json", is_flag=True)
+@click.pass_context
+def watch_book_cmd(ctx, watch_id, as_json):
+    from app.cli.commands.book import render_booking_links
+
+    client = _client(ctx)
+    try:
+        resp = client.get(f"/api/v1/watches/{watch_id}/booking")
+    finally:
+        client.close()
+    emit(safe_json(resp), as_json=as_json, render_human=render_booking_links)
+
+
 @watch_cmd.command("ack", help="Acknowledge an alert so it stops showing.")
 @click.argument("alert_id")
 @click.pass_context

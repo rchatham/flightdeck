@@ -51,14 +51,17 @@ def db_revision(message: str) -> None:
     _run_alembic("revision", "--autogenerate", "-m", message)
 
 
-@db_cmd.command("seed", help="Seed reference data (airports, points programs).")
+@db_cmd.command("seed", help="Seed reference data (airports, airlines, points programs).")
 def db_seed() -> None:
+    from scripts.seed_airlines import seed as seed_airlines
     from scripts.seed_airports import seed as seed_airports
     from scripts.seed_transfer_partners import seed as seed_transfer
 
     async def _run() -> None:
         n_airports = await seed_airports()
         console.print(f"[green]✓[/green] Seeded {n_airports} airports.")
+        n_airlines = await seed_airlines()
+        console.print(f"[green]✓[/green] Seeded {n_airlines} airlines.")
         n_programs = await seed_transfer()
         console.print(f"[green]✓[/green] Seeded {n_programs} points programs.")
 

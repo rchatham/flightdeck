@@ -36,6 +36,17 @@ generic JSON webhook — set `FLIGHTDECK_NTFY_TOPIC` or
 `FLIGHTDECK_ALERT_WEBHOOK_URL` (see `.env.example`). Delivery is
 best-effort; alerts always land in the database regardless.
 
+## Booking handoff
+
+FlightDeck doesn't issue tickets — it hands you the best places to buy,
+ordered by protection quality (airline direct → exact fare deep link →
+Google Flights price check):
+
+```bash
+flightdeck book <OFFER_ID>          # offer ids come from `flightdeck search`
+flightdeck watch book <WATCH_ID>    # book a watched trip after an alert
+```
+
 ## Ports
 
 To avoid collisions with other local services, FlightDeck uses non-default ports:

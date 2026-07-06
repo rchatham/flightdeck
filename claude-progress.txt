@@ -1,5 +1,29 @@
 # FlightDeck — session progress log
 
+## Session 2026-07-06 (third) — Hooks implemented + Booking handoff
+
+Hooks closed out (user opted to have them implemented after 3 sessions):
+- Hook 4 evaluate_watch() IMPLEMENTED: TARGET_HIT > PRICE_DROP (≥10%) >
+  NEW_LOW (≥3% under all-time low) > PRICE_SPIKE (≥20% rise ≤21 days out,
+  24h cooldown). Downward alerts share a 2% re-alert debounce. Thresholds
+  are module constants with calibration rationale in comments.
+- Hook 3 score_hidden_fare_risk() IMPLEMENTED: hidden-city = DISQUALIFIED
+  with return / EXTREME with checked bag / HIGH otherwise (never LOW);
+  split-ticket = LOW same-carrier / HIGH cross-carrier.
+  fare_discovery now honors the DISQUALIFIED contract (drops candidates).
+- ALL xfail markers removed; suite is 92 passed, 0 xfailed.
+
+Feature — booking handoff (the "booking" half):
+- data/airlines.json + scripts/seed_airlines.py: 36 major carriers with
+  direct-booking URLs, alliances, loyalty programs (table was empty; no
+  seeder existed). Wired into `flightdeck db seed`.
+- app/services/booking.py: pure link builders. Ordering by protection:
+  airline_direct > source deep link > google_flights. Round-trip routes
+  come from the Search row (segment lists fold back to origin).
+- API: GET /api/v1/offers/{id}/booking, GET /api/v1/watches/{id}/booking
+- CLI: `flightdeck book OFFER_ID`, `flightdeck watch book WATCH_ID`
+- E2E verified live against postgres with a demo offer (then cleaned up).
+
 ## Session 2026-07-06 (later) — Infra + Alert Notifications
 
 Housekeeping:
@@ -48,17 +72,15 @@ State: 67 passed, 7 xfailed. Lint: pre-existing violations only (B008/UP042
 style matches existing code; make lint was already failing before session).
 
 ## Open items
-- 🎯 Hook 3 (USER CONTRIBUTION, OPEN since prior session):
-  score_hidden_fare_risk() in app/services/fare_risks.py — still default
-  stub, 4 xfail tests in tests/test_fare_risks.py
-- 🎯 Hook 4 (USER CONTRIBUTION, OPEN): evaluate_watch() in
-  app/services/alert_rules.py — 3 xfail tests in tests/test_alert_rules.py
 - Fare-source API keys not configured in .env — searches return 0 offers;
-  get Amadeus/Kiwi/SerpAPI keys to go live
+  get Amadeus/Kiwi/SerpAPI keys to go live (the ONLY blocker to full use)
 - Notification channels unset (FLIGHTDECK_NTFY_TOPIC /
   FLIGHTDECK_ALERT_WEBHOOK_URL) — alerts CLI/DB-only until configured
-- Possible next features: award/points search (PointsProgram model exists
-  but unused), booking deep-link builder, daily alert digest
+- Celery worker + beat not running as services (manual: uv run celery -A
+  app.workers.celery_app worker / beat) — consider launchd/docker services
+- Possible next features: award/points search (PointsProgram model + 4
+  seeded programs exist but unused), daily alert digest, web UI (Phase 3
+  pattern from bizy)
 
 ## Earlier sessions (reconstructed)
 - Multi-source search (Amadeus/Kiwi/SerpAPI) + dedup + ranking (Hook 1 done)
