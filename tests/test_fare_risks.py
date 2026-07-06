@@ -1,16 +1,10 @@
-"""Tests for `score_hidden_fare_risk` — Hook 3 user contribution.
+"""Tests for `score_hidden_fare_risk` — Hook 3 (implemented classification).
 
-The default stub returns MEDIUM for everything. These tests pass against the
-default. As you add per-strategy logic (HIDDEN_CITY differs from SPLIT_TICKET,
-cross-carrier matters, has_checked_bag matters, etc.), the marked tests turn
-green.
-
-Remove xfail markers as you implement each rule.
+HIDDEN_CITY: DISQUALIFIED with a return, EXTREME with a checked bag,
+otherwise HIGH. SPLIT_TICKET: LOW same-carrier, HIGH cross-carrier.
 """
 from datetime import datetime, timedelta
 from decimal import Decimal
-
-import pytest
 
 from app.integrations.types import Segment
 from app.services.fare_risks import (
@@ -99,7 +93,6 @@ def test_each_flag_has_required_fields():
 # --- Behavior the user will implement ----------------------------------------
 
 
-@pytest.mark.xfail(reason="Implement HIDDEN_CITY+round-trip disqualification", strict=False)
 def test_hidden_city_with_round_trip_is_disqualified():
     """Hidden-city + round-trip is structurally broken — return is auto-cancelled."""
     cand = hidden_city_candidate(has_return=True)
@@ -107,7 +100,6 @@ def test_hidden_city_with_round_trip_is_disqualified():
     assert rec.overall_level == RiskLevel.DISQUALIFIED
 
 
-@pytest.mark.xfail(reason="Implement bag-check escalation for hidden_city", strict=False)
 def test_hidden_city_with_checked_bag_is_extreme():
     """Hidden-city + checked bag = lost luggage. Bump severity."""
     cand = hidden_city_candidate(has_checked_bag=True)
@@ -116,7 +108,6 @@ def test_hidden_city_with_checked_bag_is_extreme():
     assert any(f.code == "bag_loss" for f in rec.flags)
 
 
-@pytest.mark.xfail(reason="Implement default hidden_city HIGH severity", strict=False)
 def test_hidden_city_carry_on_one_way_is_high():
     """Carry-on, one-way hidden-city is HIGH severity (skiplagging is never LOW)."""
     cand = hidden_city_candidate(has_checked_bag=False, has_return=False)
@@ -133,7 +124,6 @@ def test_split_ticket_same_carrier_is_low():
     assert rec.overall_level in (RiskLevel.LOW, RiskLevel.MEDIUM)
 
 
-@pytest.mark.xfail(reason="Implement split-ticket cross-carrier HIGH", strict=False)
 def test_split_ticket_cross_carrier_is_high():
     """Cross-carrier split has no interline protection if leg 1 fails."""
     cand = split_ticket_candidate(cross_carrier=True)

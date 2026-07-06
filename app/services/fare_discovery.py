@@ -14,16 +14,15 @@ from __future__ import annotations
 import logging
 from collections.abc import Sequence
 from dataclasses import dataclass, field
-from datetime import date
 from decimal import Decimal
 
 from app.api.schemas.search import SearchRequest
 from app.integrations.kiwi import KiwiClient, KiwiError
-from app.integrations.types import NormalizedOffer, Segment
 from app.services.fare_risks import (
     FareStrategy,
     HiddenFareCandidate,
     RiskAssessment,
+    RiskLevel,
     score_hidden_fare_risk,
 )
 from app.services.route_optimizer import _fan_out_sources
@@ -170,6 +169,11 @@ async def discover_opportunities(
     opportunities: list[FareOpportunity] = []
     for c in candidates:
         risk = score_hidden_fare_risk(c)
+        # Hook 3 contract: DISQUALIFIED candidates are never surfaced.
+        if risk.overall_level == RiskLevel.DISQUALIFIED:
+            logger.info("dropping disqualified %s candidate: %s",
+                        c.strategy.value, risk.reasoning)
+            continue
         if direct_price is None or direct_price <= 0:
             savings_usd = Decimal("0")
             savings_pct = 0.0
