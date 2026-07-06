@@ -11,7 +11,7 @@ make setup        # uv sync
 make up           # start postgres + redis
 make migrate      # apply DB migrations
 make seed         # seed airports + transfer partners
-make dev          # run API server on :8001
+make dev          # run API server on :8002
 make health       # in another terminal — verify all components
 ```
 
@@ -31,12 +31,17 @@ flightdeck watch alerts                                 # unacknowledged alerts
 The Celery beat schedule checks all active watches every 6 hours. Alert
 policy lives in `app/services/alert_rules.py` (Hook 4).
 
+Fired alerts can push to your phone via [ntfy.sh](https://ntfy.sh) and/or a
+generic JSON webhook — set `FLIGHTDECK_NTFY_TOPIC` or
+`FLIGHTDECK_ALERT_WEBHOOK_URL` (see `.env.example`). Delivery is
+best-effort; alerts always land in the database regardless.
+
 ## Ports
 
 To avoid collisions with other local services, FlightDeck uses non-default ports:
 
 | Service | Port | Notes |
 | --- | --- | --- |
-| API | 8001 | 8000 reserved by business-agent |
+| API | 8002 | 8000 business-agent, 8001 hermes |
 | Postgres | 5434 | 5432/5433 used by other projects |
-| Redis | 6381 | 6379/6380 used by other projects |
+| Redis | 6382 | 6379-6381 used by other projects |

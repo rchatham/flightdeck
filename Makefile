@@ -26,7 +26,7 @@ down:
 	docker compose down
 
 dev:
-	uv run uvicorn app.main:app --reload --port 8001
+	uv run uvicorn app.main:app --reload --port 8002
 
 migrate:
 	uv run flightdeck db init

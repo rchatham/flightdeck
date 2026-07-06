@@ -22,13 +22,13 @@ class Settings(BaseSettings):
 
     env: Literal["dev", "test", "prod"] = "dev"
     api_host: str = "0.0.0.0"
-    api_port: int = 8001
+    api_port: int = 8002
     log_level: str = "INFO"
 
     database_url: str = (
         "postgresql+asyncpg://flightdeck:flightdeck@localhost:5434/flightdeck"
     )
-    redis_url: str = "redis://localhost:6381/0"
+    redis_url: str = "redis://localhost:6382/0"
 
     amadeus_api_key: str = Field(default="", validation_alias="AMADEUS_API_KEY")
     amadeus_api_secret: str = Field(default="", validation_alias="AMADEUS_API_SECRET")
@@ -38,6 +38,11 @@ class Settings(BaseSettings):
     )
     kiwi_api_key: str = Field(default="", validation_alias="KIWI_API_KEY")
     serpapi_api_key: str = Field(default="", validation_alias="SERPAPI_API_KEY")
+
+    # Alert notification channels — both optional; unset means CLI/DB only.
+    ntfy_topic: str = ""             # FLIGHTDECK_NTFY_TOPIC, e.g. "reid-flightdeck-a8x2"
+    ntfy_server: str = "https://ntfy.sh"
+    alert_webhook_url: str = ""      # FLIGHTDECK_ALERT_WEBHOOK_URL, POSTed JSON per alert
 
     @property
     def api_base_url(self) -> str:
