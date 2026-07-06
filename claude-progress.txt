@@ -1,5 +1,29 @@
 # FlightDeck — session progress log
 
+## Session 2026-07-06 (later) — Infra + Alert Notifications
+
+Housekeeping:
+- git initialized (branch main); initial commit ea0c7d2 imported everything
+- Ports relocated after discovering hermes-relay squatting both registered
+  ports: Redis 6381→6382, API 8001→8002. Global port registry in
+  ~/.claude/CLAUDE.md updated with flight-tracker AND hermes rows.
+  (8001 was extra sneaky: hermes binds wildcard/IPv6, uvicorn bound IPv4
+  loopback — both "worked", localhost resolved to hermes.)
+- Migration e3f8a12b90d4 APPLIED to live postgres; E2E verified via CLI:
+  watch add → check (0 offers, no API keys — graceful) → list → alerts
+
+Feature — alert notification delivery:
+- app/services/notifications.py: notify_alert() pushes fired alerts to
+  ntfy.sh (FLIGHTDECK_NTFY_TOPIC) and/or JSON webhook
+  (FLIGHTDECK_ALERT_WEBHOOK_URL). Best-effort: failures logged, never
+  raised, never block the check cycle. Wired into check_watch() AFTER
+  commit so alerts are durable regardless of delivery.
+- Bug caught by tests: ntfy Title header had a UTF-8 arrow — HTTP headers
+  are ASCII-only; every ntfy push would have 500'd. Now ASCII + guard test.
+- tests/test_notifications.py: 6 tests via httpx.MockTransport (no network)
+
+State: 73 passed, 7 xfailed.
+
 ## Session 2026-07-06 — Price Watches & Alerts (the "tracking" half)
 
 Built end-to-end price watching:
@@ -27,12 +51,14 @@ style matches existing code; make lint was already failing before session).
 - 🎯 Hook 3 (USER CONTRIBUTION, OPEN since prior session):
   score_hidden_fare_risk() in app/services/fare_risks.py — still default
   stub, 4 xfail tests in tests/test_fare_risks.py
-- 🎯 Hook 4 (see above)
-- Repo is NOT a git repository — no version control yet
-- Migration e3f8a12b90d4 needs `make up && make migrate` to apply
-- Alert delivery is DB/CLI-only; no push channel (email/ntfy) yet
-- Possible next features: notification channel for alerts, award/points
-  search (PointsProgram model exists but unused), booking deep-link builder
+- 🎯 Hook 4 (USER CONTRIBUTION, OPEN): evaluate_watch() in
+  app/services/alert_rules.py — 3 xfail tests in tests/test_alert_rules.py
+- Fare-source API keys not configured in .env — searches return 0 offers;
+  get Amadeus/Kiwi/SerpAPI keys to go live
+- Notification channels unset (FLIGHTDECK_NTFY_TOPIC /
+  FLIGHTDECK_ALERT_WEBHOOK_URL) — alerts CLI/DB-only until configured
+- Possible next features: award/points search (PointsProgram model exists
+  but unused), booking deep-link builder, daily alert digest
 
 ## Earlier sessions (reconstructed)
 - Multi-source search (Amadeus/Kiwi/SerpAPI) + dedup + ranking (Hook 1 done)

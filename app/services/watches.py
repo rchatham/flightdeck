@@ -21,6 +21,7 @@ from app.services.alert_rules import (
     WatchSnapshot,
     evaluate_watch,
 )
+from app.services.notifications import notify_alert
 from app.services.route_optimizer import _fan_out_sources
 
 logger = logging.getLogger(__name__)
@@ -115,4 +116,10 @@ async def check_watch(session: AsyncSession, watch: PriceWatch) -> CheckOutcome:
         logger.info("alert fired for watch %s: %s at $%s", watch.id, decision.kind.value, price)
 
     await session.commit()
+
+    # Push AFTER commit — the alert is durable even if delivery fails, and
+    # notify_alert never raises.
+    if alert is not None:
+        await notify_alert(watch, alert)
+
     return CheckOutcome(str(watch.id), len(offers), price, alert)
