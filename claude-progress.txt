@@ -1,5 +1,30 @@
 # FlightDeck — session progress log
 
+## Session 2026-07-06 (fifth) — Geo search + Deals engine
+
+- app/services/geo.py: haversine, parse_latlon, rank_nearby, match_airports
+  (pure, unit-tested) + resolve_location/expand_airport (async). Locations
+  accept IATA | city/airport name | "lat,lon". Verified live: "tokyo" →
+  NRT+HND, "37.77,-122.42" → SFO/OAK/SJC, LHR → all 5 London airports.
+- include_nearby is now REAL: route_optimizer._fan_out_combos expands both
+  ends geo-wise (≤4 pairs/search, primary pair first). It was previously
+  persisted but ignored.
+- app/services/deals.py: scan_deals() — resolves both locations (≤3
+  airports/side), samples dates evenly across the window (endpoints
+  always kept), fans out under a semaphore with max_searches quota cap,
+  records every observation to price_history, grades vs historical median
+  (DEAL ≤ -20%, GOOD ≤ -10%), returns per-date bests + best day + booking
+  links; optional hidden-fare discovery on the best find.
+- API: GET /api/v1/airports/resolve, POST /api/v1/deals/scan
+- CLI: flightdeck deals scan / deals airports
+- Web: Deals tab (location inputs, date window, trip length, hacker-fares
+  toggle; best-day hero card, per-date table with DEAL/GOOD badges,
+  booking links, risk-scored hacker-fare cards). Search tab gained a
+  "nearby airports" checkbox. Rendering verified in preview with a
+  stubbed scan response; resolution + scan flow verified live (12
+  searches over SFO/OAK/SJC × NRT/HND).
+- Suite: 107 passed.
+
 ## Session 2026-07-06 (fourth) — Web dashboard
 
 - app/static/index.html: single-page dashboard served by FastAPI at GET /

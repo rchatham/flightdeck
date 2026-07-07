@@ -23,7 +23,8 @@ def test_dashboard_served_at_root():
     assert resp.headers["content-type"].startswith("text/html")
     assert "FlightDeck" in resp.text
     # The page drives the real API endpoints — keep these paths in sync.
-    for path in ("/api/v1/watches", "/api/v1/routes/search", "/api/v1/timing/analyze"):
+    for path in ("/api/v1/watches", "/api/v1/routes/search", "/api/v1/timing/analyze",
+                 "/api/v1/deals/scan"):
         assert path in resp.text
 
 

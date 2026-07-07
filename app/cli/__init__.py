@@ -6,6 +6,7 @@ import click
 
 from app.cli.commands.book import book_cmd
 from app.cli.commands.db import db_cmd
+from app.cli.commands.deals import deals_cmd
 from app.cli.commands.fares import fares_cmd
 from app.cli.commands.health import health_cmd
 from app.cli.commands.scrape import scrape_cmd
@@ -35,6 +36,7 @@ cli.add_command(timing_cmd)
 cli.add_command(fares_cmd)
 cli.add_command(watch_cmd)
 cli.add_command(book_cmd)
+cli.add_command(deals_cmd)
 
 
 if __name__ == "__main__":

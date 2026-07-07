@@ -85,6 +85,7 @@
   <button data-tab="watches" class="active">Watches</button>
   <button data-tab="alerts">Alerts <span id="alert-count" class="badge red" hidden>0</span></button>
   <button data-tab="search">Search</button>
+  <button data-tab="deals">Deals</button>
   <button data-tab="timing">Timing</button>
 </nav>
 
@@ -146,12 +147,43 @@
             <option value="first">first</option>
           </select>
         </label>
+        <label style="flex-direction:row;align-items:center;gap:6px;padding-bottom:8px">
+          <input type="checkbox" name="include_nearby" checked style="width:auto"> nearby airports
+        </label>
         <button class="primary" id="search-btn">Search</button>
       </form>
     </div>
     <div class="card" id="search-results-card" hidden>
       <h2 id="search-results-title">Results</h2>
       <div id="search-results"></div>
+    </div>
+  </section>
+
+  <!-- ===================== Deals ===================== -->
+  <section id="tab-deals">
+    <div class="card">
+      <h2>Find the cheapest day to fly</h2>
+      <div class="muted" style="font-size:13px;margin-bottom:10px">
+        Origin and destination accept an airport code (<code>SFO</code>), a city
+        (<code>tokyo</code>), or coordinates (<code>37.77,-122.42</code>) — nearby
+        airports are included automatically.
+      </div>
+      <form class="row" id="deals-form">
+        <label>From <input name="origin" placeholder="SFO or city or lat,lon" style="width:170px" required></label>
+        <label>To <input name="destination" placeholder="tokyo" style="width:170px" required></label>
+        <label>Earliest depart <input name="date_from" type="date" required></label>
+        <label>Latest depart <input name="date_to" type="date" required></label>
+        <label>Trip length, days (opt) <input name="trip_length_days" type="number" min="1" max="90" style="width:110px"></label>
+        <label>Max searches <input name="max_searches" type="number" value="12" min="1" max="40" style="width:90px"></label>
+        <label style="flex-direction:row;align-items:center;gap:6px;padding-bottom:8px">
+          <input type="checkbox" name="include_hacker_fares" style="width:auto"> hacker fares
+        </label>
+        <button class="primary" id="deals-btn">Scan</button>
+      </form>
+    </div>
+    <div class="card" id="deals-results-card" hidden>
+      <h2 id="deals-results-title">Scan results</h2>
+      <div id="deals-results"></div>
     </div>
   </section>
 
@@ -356,7 +388,7 @@ $("#search-form").addEventListener("submit", async e => {
   const body = {
     origin: f.get("origin").toUpperCase(), destination: f.get("destination").toUpperCase(),
     departure_date: f.get("departure_date"), passengers: Number(f.get("passengers")) || 1,
-    cabin_class: f.get("cabin_class"),
+    cabin_class: f.get("cabin_class"), include_nearby: f.get("include_nearby") === "on",
   };
   if (f.get("return_date")) body.return_date = f.get("return_date");
   const btn = $("#search-btn"), card = $("#search-results-card"), out = $("#search-results");
@@ -390,6 +422,89 @@ window.bookOffer = async id => {
   try { bookingModal(await api(`/api/v1/offers/${id}/booking`)); }
   catch (err) { toast(err.message, true); }
 };
+
+/* ---------- deals ---------- */
+const TIER_BADGE = {DEAL: "green", GOOD: "cyan"};
+
+function bookingLinksInline(links) {
+  const badges = {airline_direct: ["green", "BEST PROTECTION"], source: ["cyan", "THIS EXACT FARE"],
+                  google_flights: ["yellow", "VERIFY PRICE"]};
+  return links.map(l => {
+    const [color, label] = badges[l.kind] ?? ["gray", l.kind];
+    return `<div class="link-item">
+      <span class="badge ${color}">${label}</span> <strong>${esc(l.label)}</strong><br>
+      <span class="links"><a href="${esc(l.url)}" target="_blank" rel="noopener">${esc(l.url)}</a></span>
+      <div class="muted" style="font-size:13px">${esc(l.note)}</div></div>`;
+  }).join("");
+}
+
+const RISK_BADGE = {LOW: "green", MEDIUM: "yellow", HIGH: "red", EXTREME: "red"};
+
+$("#deals-form").addEventListener("submit", async e => {
+  e.preventDefault();
+  const f = new FormData(e.target);
+  const body = {
+    origin: f.get("origin"), destination: f.get("destination"),
+    date_from: f.get("date_from"), date_to: f.get("date_to"),
+    max_searches: Number(f.get("max_searches")) || 12,
+    include_nearby: true,
+    include_hacker_fares: f.get("include_hacker_fares") === "on",
+  };
+  if (f.get("trip_length_days")) body.trip_length_days = Number(f.get("trip_length_days"));
+  const btn = $("#deals-btn"), card = $("#deals-results-card"), out = $("#deals-results");
+  btn.disabled = true; btn.innerHTML = '<span class="spin">◌</span> scanning';
+  card.hidden = false;
+  out.innerHTML = '<div class="empty">Scanning dates × nearby airports — this fans out live searches and can take a minute…</div>';
+  try {
+    const r = await api("/api/v1/deals/scan", {method: "POST", body: JSON.stringify(body)});
+    $("#deals-results-title").textContent =
+      `${r.origin_label} (${r.origin_airports.join("/")}) → ${r.destination_label} (${r.destination_airports.join("/")})`;
+    if (!r.by_date.length) {
+      out.innerHTML = `<div class="empty">${r.searches_run} searches ran but found no offers. Without
+        fare-source API keys every search returns empty — check <code>flightdeck health</code>.</div>`;
+      return;
+    }
+    const best = r.best;
+    const rows = r.by_date.map(b => {
+      const isBest = best && b.departure_date === best.departure_date;
+      const tier = b.tier
+        ? `<span class="badge ${TIER_BADGE[b.tier]}">${b.tier} ${b.vs_median_pct > 0 ? "+" : ""}${b.vs_median_pct}%</span>`
+        : (b.vs_median_pct != null ? `<span class="muted">${b.vs_median_pct > 0 ? "+" : ""}${b.vs_median_pct}% vs median</span>`
+                                   : '<span class="muted">no history</span>');
+      return `<tr${isBest ? ' style="background:#f0fdf4"' : ""}>
+        <td class="mono">${isBest ? "★ " : ""}${esc(b.departure_date)}</td>
+        <td>${esc(b.origin)}→${esc(b.destination)}</td>
+        <td class="num"><strong>${usd(b.price_usd)}</strong></td>
+        <td>${b.stops === 0 ? "nonstop" : b.stops + " stop" + (b.stops > 1 ? "s" : "")}</td>
+        <td><span class="badge gray">${esc(b.source)}</span></td><td>${tier}</td></tr>`;
+    }).join("");
+    const bestCard = best ? `
+      <div class="card" style="border-left:4px solid var(--green);margin-bottom:12px">
+        <strong style="font-size:17px">Best day to fly: ${esc(best.departure_date)}</strong>
+        ${best.return_date ? `<span class="muted"> (return ${esc(best.return_date)})</span>` : ""}
+        — <strong>${usd(best.price_usd)}</strong> ${esc(best.origin)}→${esc(best.destination)}
+        ${best.tier ? `<span class="badge ${TIER_BADGE[best.tier]}" style="margin-left:6px">${best.tier}</span>` : ""}
+        <div style="margin-top:8px">${bookingLinksInline(r.booking_links)}</div>
+      </div>` : "";
+    const opps = r.opportunities.map(o => `
+      <div class="card" style="border-left:4px solid var(--yellow);margin-bottom:10px">
+        <span class="badge ${RISK_BADGE[o.risk_level] ?? "gray"}">${esc(o.risk_level)} RISK</span>
+        <strong style="margin-left:8px">Hacker fare: ${esc(o.strategy.replace("_", " "))}</strong>
+        — ${usd(o.price_usd)} <span class="muted">(saves ${usd(o.savings_usd)}, ${o.savings_pct}%)</span>
+        <div class="muted" style="margin-top:6px">${esc(o.risk_reasoning)}</div>
+        <ol style="margin:8px 0 0;padding-left:20px;font-size:13.5px">
+          ${o.booking_steps.map(s => `<li>${esc(s)}</li>`).join("")}</ol>
+      </div>`).join("");
+    const meta = `<div class="muted" style="margin-bottom:10px;font-size:13px">
+      ${r.searches_run} searches · ${r.dates_sampled} dates sampled ·
+      ${r.median_price_usd ? "historical median " + usd(r.median_price_usd) : "no price history yet for deal grading"}</div>`;
+    out.innerHTML = meta + bestCard +
+      `<table><thead><tr><th>Depart</th><th>Route</th><th class="num">Price</th>
+        <th>Stops</th><th>Source</th><th>Deal?</th></tr></thead><tbody>${rows}</tbody></table>` + opps;
+  } catch (err) {
+    out.innerHTML = `<div class="empty">Scan failed: ${esc(err.message)}</div>`;
+  } finally { btn.disabled = false; btn.textContent = "Scan"; }
+});
 
 /* ---------- timing ---------- */
 const VERDICT_COLOR = {BUY_NOW: "var(--green)", WAIT: "var(--yellow)",

@@ -43,6 +43,26 @@ generic JSON webhook — set `FLIGHTDECK_NTFY_TOPIC` or
 `FLIGHTDECK_ALERT_WEBHOOK_URL` (see `.env.example`). Delivery is
 best-effort; alerts always land in the database regardless.
 
+## Deals — cheapest day to fly
+
+Origin/destination can be an IATA code, a **city name**, or **"lat,lon"**
+coordinates; both sides expand to nearby airports by geodesic distance.
+The scan samples departure dates across a window, fans out live searches
+over the (airports × dates) grid, grades each price against the
+price-history median (`DEAL` ≤ -20%, `GOOD` ≤ -10%), and recommends the
+cheapest day. `--hacker-fares` additionally runs hidden-city/split-ticket
+discovery (risk-scored) on the best find.
+
+```bash
+flightdeck deals airports "tokyo"                  # → NRT, HND
+flightdeck deals airports "37.77,-122.42"          # → SFO, OAK, SJC
+flightdeck deals scan "san francisco" tokyo \
+  --from 2026-09-01 --to 2026-09-30 --trip-length 10 --hacker-fares
+```
+
+Regular searches honor nearby expansion too: `include_nearby` fans the
+search out across up to 4 geo-close airport pairs.
+
 ## Booking handoff
 
 FlightDeck doesn't issue tickets — it hands you the best places to buy,

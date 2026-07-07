@@ -7,6 +7,7 @@ from fastapi.responses import FileResponse
 from sqlalchemy import text
 
 from app.api.routes.booking import router as booking_router
+from app.api.routes.deals import router as deals_router
 from app.api.routes.fares import router as fares_router
 from app.api.routes.search import router as search_router
 from app.api.routes.timing import router as timing_router
@@ -38,6 +39,7 @@ app.include_router(timing_router)
 app.include_router(fares_router)
 app.include_router(watches_router)
 app.include_router(booking_router)
+app.include_router(deals_router)
 
 
 _STATIC_DIR = Path(__file__).parent / "static"

@@ -24,6 +24,7 @@ from app.integrations.serpapi import SerpApiClient, SerpApiError
 from app.integrations.types import NormalizedOffer
 from app.models import FlightOffer, Search
 from app.services.dedup import dedupe_offers
+from app.services.geo import expand_airport
 from app.services.ranking import RankingPreferences, score_offer
 
 logger = logging.getLogger(__name__)
@@ -104,6 +105,39 @@ async def _fan_out_sources(req: SearchRequest) -> list[NormalizedOffer]:
     return flat
 
 
+# Nearby expansion: cap the number of (origin, destination) pairs a single
+# search can fan out to — each pair costs one query per source.
+MAX_NEARBY_COMBOS = 4
+
+
+async def _expand_route(session: AsyncSession, req: SearchRequest) -> list[tuple[str, str]]:
+    """(origin, destination) pairs for the search, honoring include_nearby.
+
+    Airports are geo-expanded by lat/lon distance (see services.geo); the
+    requested pair always comes first, alternates follow closest-first.
+    """
+    if not req.include_nearby:
+        return [(req.origin, req.destination)]
+    origins = await expand_airport(session, req.origin)
+    dests = await expand_airport(session, req.destination)
+    combos = [(o, d) for o in origins for d in dests if o != d]
+    primary = (req.origin, req.destination)
+    if primary in combos:
+        combos.remove(primary)
+    return [primary, *combos][:MAX_NEARBY_COMBOS]
+
+
+async def _fan_out_combos(session: AsyncSession, req: SearchRequest) -> list[NormalizedOffer]:
+    """Fan out across sources AND nearby-airport pairs, concurrently."""
+    combos = await _expand_route(session, req)
+    reqs = [
+        req.model_copy(update={"origin": o, "destination": d, "include_nearby": False})
+        for o, d in combos
+    ]
+    results = await asyncio.gather(*[_fan_out_sources(r) for r in reqs])
+    return [offer for source_offers in results for offer in source_offers]
+
+
 def _to_db_offer(search_id, n: NormalizedOffer) -> FlightOffer:
     return FlightOffer(
         search_id=search_id,
@@ -156,9 +190,10 @@ async def run_search(
     session.add(search)
     await session.flush()  # populate search.id
 
-    # Fan out to Amadeus + Kiwi + SerpAPI in parallel; failed sources are logged
+    # Fan out to Amadeus + Kiwi + SerpAPI in parallel — and across nearby
+    # airport pairs when include_nearby is set. Failed sources are logged
     # and skipped, never block the response.
-    normalized: list[NormalizedOffer] = await _fan_out_sources(req)
+    normalized: list[NormalizedOffer] = await _fan_out_combos(session, req)
 
     # Dedup across sources, then rank via the user's score_offer hook
     deduped = dedupe_offers(normalized)
