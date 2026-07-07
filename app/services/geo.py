@@ -117,6 +117,12 @@ async def resolve_location(
     coordinates and then expanded to neighbors within `radius_km` (the
     match itself always ranks first at 0 km... or its true distance).
     Pass radius_km=0 to disable expansion and get exact matches only.
+
+    The seeded airport table covers ~100 major hubs, not the ~7,000 IATA
+    codes that exist worldwide. A query shaped like a code (3 letters) but
+    absent from the table falls through as an unverified bare code rather
+    than failing outright — the fare sources can still search it, they just
+    won't get geo-expanded to neighbors since we don't know their location.
     """
     q = query.strip()
     airports = await _all_airports(session)
@@ -151,6 +157,18 @@ async def resolve_location(
     # 3. City / airport-name substring
     matches = match_airports(airports, q)
     if not matches:
+        # 4. Last resort: shaped like an IATA code, just not one we've
+        #    seeded. Let it through unverified rather than blocking every
+        #    airport outside our curated ~100-row reference table.
+        if len(code) == 3 and code.isalpha():
+            placeholder = Airport(
+                iata_code=code, city=code, country="??",
+                name="Unverified — not in FlightDeck's airport reference data",
+            )
+            return ResolvedLocation(
+                query=query, kind="iata_unverified", label=f"{code} (unverified)",
+                anchor=None, airports=[AirportHit(placeholder, 0.0)],
+            )
         return ResolvedLocation(query=query, kind="name", label=query, anchor=None)
     anchor_airport = next((m for m in matches if m.latitude is not None), None)
     if anchor_airport is None or radius_km <= 0:

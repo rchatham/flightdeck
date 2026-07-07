@@ -1,5 +1,39 @@
 # FlightDeck — session progress log
 
+## Session 2026-07-07 — Bugfix: unseeded IATA codes 404'd in deals scan
+
+Reported: `flightdeck deals scan MGA ...` → "404: could not resolve 'MGA'
+to any known airport". Root cause: data/airports.csv is a curated ~109-row
+set (major hubs only), not the ~7,000 real IATA codes — resolve_location
+required an exact row match or a city/name substring hit, so any valid but
+unseeded code (Managua, and plenty of others) hard-failed instead of
+degrading.
+
+Fix in app/services/geo.py resolve_location(): added a 4th fallback tier —
+a query shaped like an IATA code (3 letters) that matches neither a seeded
+row nor any city/airport name now resolves as an "unverified" bare code
+(kind="iata_unverified") instead of failing. It has no coordinates, so it
+can't be geo-expanded to neighbors, but it can still be searched — the
+fare-source APIs validate real airport codes themselves. Queries that
+aren't shaped like a code and don't match anything (e.g. "nowhereland")
+still fail clearly.
+
+Verified live (docker postgres/redis already running, restarted the
+uvicorn preview to pick up the change — no --reload configured):
+- `deals airports MGA` → resolves, labeled "(unverified)"
+- `deals scan MGA MIA ...` → runs (0 offers, as expected with no fare
+  API keys — same behavior as any other route), no more 404
+- `deals scan MGA MIA` WITH nearby expansion → MIA still expands to
+  MIA/FLL/PBI; MGA correctly stays a single bare code (no coordinates)
+- `deals airports nowhereland` → still reports "not found" (regression
+  guard: the fallback is scoped to 3-letter alpha queries only)
+
+No new pytest added for this async/DB-touching path — consistent with
+the existing test split (pure helpers in test_geo.py are unit-tested;
+resolve_location/expand_airport's DB-dependent behavior is verified live,
+same as earlier geo/deals verification this project). Full suite: 107
+passed, unchanged.
+
 ## Session 2026-07-06 (fifth) — Geo search + Deals engine
 
 - app/services/geo.py: haversine, parse_latlon, rank_nearby, match_airports
