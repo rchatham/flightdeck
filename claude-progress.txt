@@ -1,5 +1,24 @@
 # FlightDeck — session progress log
 
+## Session 2026-07-06 (fourth) — Web dashboard
+
+- app/static/index.html: single-page dashboard served by FastAPI at GET /
+  (no separate frontend, no new port, zero new dependencies). Tabs:
+  Watches (add/list/check-now/book/delete), Alerts (list/ack + nav badge),
+  Search (offers table → booking-links modal), Timing (verdict card).
+  Vanilla JS + fetch against the existing JSON API.
+- .claude/launch.json: `flightdeck` config for browser preview (uv run
+  uvicorn on 8002).
+- tests/test_web.py: dashboard smoke tests via httpx.ASGITransport,
+  including a guard that the page references real API paths.
+- Bug caught in preview: `.badge { display:inline-block }` silently
+  defeated the `hidden` attribute (author CSS outranks the UA [hidden]
+  rule) — fixed with `[hidden]{display:none!important}`.
+- Verified in live browser preview: all four tabs exercised against
+  running postgres; add-watch form, check-now toast, booking modal,
+  no-keys search empty state, timing verdict all render correctly.
+- Suite: 94 passed.
+
 ## Session 2026-07-06 (third) — Hooks implemented + Booking handoff
 
 Hooks closed out (user opted to have them implemented after 3 sessions):

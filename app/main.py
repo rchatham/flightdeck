@@ -1,7 +1,9 @@
 import logging
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 from fastapi import FastAPI
+from fastapi.responses import FileResponse
 from sqlalchemy import text
 
 from app.api.routes.booking import router as booking_router
@@ -36,6 +38,15 @@ app.include_router(timing_router)
 app.include_router(fares_router)
 app.include_router(watches_router)
 app.include_router(booking_router)
+
+
+_STATIC_DIR = Path(__file__).parent / "static"
+
+
+@app.get("/", include_in_schema=False)
+async def index() -> FileResponse:
+    """Single-page dashboard — self-contained HTML served from the API itself."""
+    return FileResponse(_STATIC_DIR / "index.html")
 
 
 @app.get("/health")

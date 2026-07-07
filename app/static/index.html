@@ -1,0 +1,430 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>FlightDeck</title>
+<style>
+  :root {
+    --bg: #f6f7f9; --card: #fff; --ink: #1a2233; --muted: #6b7486;
+    --line: #e3e6ec; --accent: #2563eb; --accent-ink: #fff;
+    --green: #16a34a; --yellow: #ca8a04; --red: #dc2626; --cyan: #0891b2;
+  }
+  * { box-sizing: border-box; }
+  [hidden] { display: none !important; }  /* author display rules must not defeat `hidden` */
+  body { margin: 0; font: 15px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+         background: var(--bg); color: var(--ink); }
+  header { background: var(--ink); color: #fff; padding: 14px 24px;
+           display: flex; align-items: baseline; gap: 14px; }
+  header h1 { font-size: 18px; margin: 0; letter-spacing: .3px; }
+  header span { color: #9aa4b8; font-size: 13px; }
+  nav { display: flex; gap: 4px; background: var(--card); padding: 0 24px;
+        border-bottom: 1px solid var(--line); }
+  nav button { border: 0; background: none; padding: 12px 16px; font: inherit;
+               color: var(--muted); cursor: pointer; border-bottom: 2px solid transparent; }
+  nav button.active { color: var(--accent); border-bottom-color: var(--accent); font-weight: 600; }
+  main { max-width: 980px; margin: 24px auto; padding: 0 24px; }
+  section { display: none; } section.active { display: block; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 10px;
+          padding: 18px; margin-bottom: 16px; }
+  .card h2 { margin: 0 0 12px; font-size: 15px; }
+  form.row { display: flex; flex-wrap: wrap; gap: 10px; align-items: flex-end; }
+  label { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--muted); }
+  input, select { font: inherit; padding: 7px 9px; border: 1px solid var(--line);
+                  border-radius: 7px; background: #fff; color: var(--ink); width: 130px; }
+  input[type=date] { width: 150px; }
+  button.primary { font: inherit; font-weight: 600; padding: 8px 16px; border: 0;
+                   border-radius: 7px; background: var(--accent); color: var(--accent-ink);
+                   cursor: pointer; }
+  button.small { font: inherit; font-size: 12.5px; padding: 4px 10px; border: 1px solid var(--line);
+                 border-radius: 6px; background: #fff; color: var(--ink); cursor: pointer; }
+  button.small:hover { border-color: var(--accent); color: var(--accent); }
+  button.danger:hover { border-color: var(--red); color: var(--red); }
+  table { width: 100%; border-collapse: collapse; font-size: 14px; }
+  th { text-align: left; color: var(--muted); font-size: 12px; font-weight: 600;
+       padding: 6px 8px; border-bottom: 1px solid var(--line); }
+  td { padding: 8px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  tr:last-child td { border-bottom: 0; }
+  .num { text-align: right; font-variant-numeric: tabular-nums; }
+  .muted { color: var(--muted); } .mono { font-variant-numeric: tabular-nums; }
+  .empty { color: var(--muted); padding: 14px 4px; }
+  .badge { display: inline-block; font-size: 11px; font-weight: 700; padding: 2px 8px;
+           border-radius: 99px; letter-spacing: .3px; }
+  .badge.green { background: #dcfce7; color: var(--green); }
+  .badge.yellow { background: #fef9c3; color: var(--yellow); }
+  .badge.red { background: #fee2e2; color: var(--red); }
+  .badge.cyan { background: #cffafe; color: var(--cyan); }
+  .badge.gray { background: #eef1f5; color: var(--muted); }
+  .alert-card { border-left: 4px solid var(--green); }
+  .alert-card.price_spike { border-left-color: var(--red); }
+  .alert-card.new_low { border-left-color: var(--cyan); }
+  .links a { color: var(--accent); word-break: break-all; }
+  .link-item { padding: 10px 0; border-bottom: 1px solid var(--line); }
+  .link-item:last-child { border-bottom: 0; }
+  #modal-backdrop { display: none; position: fixed; inset: 0; background: rgba(15,20,35,.45); }
+  #modal-backdrop.open { display: flex; align-items: flex-start; justify-content: center;
+                         padding: 60px 16px; }
+  #modal { background: var(--card); border-radius: 12px; max-width: 640px; width: 100%;
+           max-height: 75vh; overflow: auto; padding: 20px; }
+  #modal h3 { margin: 0 0 4px; font-size: 15px; }
+  #toast { position: fixed; bottom: 22px; left: 50%; transform: translateX(-50%);
+           background: var(--ink); color: #fff; padding: 10px 18px; border-radius: 8px;
+           font-size: 13.5px; opacity: 0; transition: opacity .25s; pointer-events: none;
+           max-width: 80vw; }
+  #toast.show { opacity: 1; }
+  #toast.err { background: var(--red); }
+  .verdict { font-size: 22px; font-weight: 800; }
+  .spin { display: inline-block; animation: spin 1s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+</style>
+</head>
+<body>
+<header><h1>✈ FlightDeck</h1><span>search · track · alert · book</span></header>
+
+<nav>
+  <button data-tab="watches" class="active">Watches</button>
+  <button data-tab="alerts">Alerts <span id="alert-count" class="badge red" hidden>0</span></button>
+  <button data-tab="search">Search</button>
+  <button data-tab="timing">Timing</button>
+</nav>
+
+<main>
+  <!-- ===================== Watches ===================== -->
+  <section id="tab-watches" class="active">
+    <div class="card">
+      <h2>Watch a trip</h2>
+      <form class="row" id="watch-form">
+        <label>Origin <input name="origin" placeholder="SFO" maxlength="3" required></label>
+        <label>Destination <input name="destination" placeholder="NRT" maxlength="3" required></label>
+        <label>Depart <input name="departure_date" type="date" required></label>
+        <label>Return (opt) <input name="return_date" type="date"></label>
+        <label>Target $ (opt) <input name="target_price_usd" type="number" min="0" step="1"></label>
+        <label>Cabin
+          <select name="cabin_class">
+            <option value="economy">economy</option>
+            <option value="premium_economy">premium economy</option>
+            <option value="business">business</option>
+            <option value="first">first</option>
+          </select>
+        </label>
+        <button class="primary">Add watch</button>
+      </form>
+    </div>
+    <div class="card">
+      <h2>Active watches</h2>
+      <div id="watch-list"><div class="empty">Loading…</div></div>
+    </div>
+  </section>
+
+  <!-- ===================== Alerts ===================== -->
+  <section id="tab-alerts">
+    <div class="card">
+      <h2>Alerts
+        <label style="display:inline-flex;flex-direction:row;gap:6px;margin-left:12px;font-weight:400">
+          <input type="checkbox" id="alerts-show-acked" style="width:auto"> show acknowledged
+        </label>
+      </h2>
+      <div id="alert-list"><div class="empty">Loading…</div></div>
+    </div>
+  </section>
+
+  <!-- ===================== Search ===================== -->
+  <section id="tab-search">
+    <div class="card">
+      <h2>Search flights</h2>
+      <form class="row" id="search-form">
+        <label>Origin <input name="origin" placeholder="SFO" maxlength="3" required></label>
+        <label>Destination <input name="destination" placeholder="NRT" maxlength="3" required></label>
+        <label>Depart <input name="departure_date" type="date" required></label>
+        <label>Return (opt) <input name="return_date" type="date"></label>
+        <label>Passengers <input name="passengers" type="number" value="1" min="1" max="9"></label>
+        <label>Cabin
+          <select name="cabin_class">
+            <option value="economy">economy</option>
+            <option value="premium_economy">premium economy</option>
+            <option value="business">business</option>
+            <option value="first">first</option>
+          </select>
+        </label>
+        <button class="primary" id="search-btn">Search</button>
+      </form>
+    </div>
+    <div class="card" id="search-results-card" hidden>
+      <h2 id="search-results-title">Results</h2>
+      <div id="search-results"></div>
+    </div>
+  </section>
+
+  <!-- ===================== Timing ===================== -->
+  <section id="tab-timing">
+    <div class="card">
+      <h2>Should I book now?</h2>
+      <form class="row" id="timing-form">
+        <label>Origin <input name="origin" placeholder="SFO" maxlength="3" required></label>
+        <label>Destination <input name="destination" placeholder="NRT" maxlength="3" required></label>
+        <label>Depart <input name="departure_date" type="date" required></label>
+        <label>Current price $ (opt) <input name="current_price" type="number" min="0" step="1"></label>
+        <button class="primary">Analyze</button>
+      </form>
+    </div>
+    <div class="card" id="timing-result-card" hidden>
+      <div id="timing-result"></div>
+    </div>
+  </section>
+</main>
+
+<div id="modal-backdrop"><div id="modal"></div></div>
+<div id="toast"></div>
+
+<script>
+"use strict";
+const $ = (sel, el=document) => el.querySelector(sel);
+const $$ = (sel, el=document) => [...el.querySelectorAll(sel)];
+const esc = s => String(s ?? "").replace(/[&<>"']/g,
+  c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const usd = v => v == null ? "—" : "$" + Number(v).toLocaleString(undefined, {maximumFractionDigits: 0});
+const when = iso => iso ? new Date(iso).toLocaleString(undefined,
+  {month:"short", day:"numeric", hour:"2-digit", minute:"2-digit"}) : "never";
+
+let toastTimer;
+function toast(msg, isErr=false) {
+  const t = $("#toast");
+  t.textContent = msg; t.className = "show" + (isErr ? " err" : "");
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => t.className = "", 3500);
+}
+
+async function api(path, opts={}) {
+  const resp = await fetch(path, {headers: {"Content-Type": "application/json"}, ...opts});
+  if (resp.status === 204) return null;
+  const body = await resp.json().catch(() => ({}));
+  if (!resp.ok) {
+    const detail = typeof body.detail === "string" ? body.detail : JSON.stringify(body.detail ?? body);
+    throw new Error(`${resp.status}: ${detail}`);
+  }
+  return body;
+}
+
+/* ---------- tabs ---------- */
+$$("nav button").forEach(btn => btn.addEventListener("click", () => {
+  $$("nav button").forEach(b => b.classList.toggle("active", b === btn));
+  $$("main section").forEach(s => s.classList.toggle("active", s.id === "tab-" + btn.dataset.tab));
+  if (btn.dataset.tab === "watches") loadWatches();
+  if (btn.dataset.tab === "alerts") loadAlerts();
+}));
+
+/* ---------- modal ---------- */
+function openModal(html) { $("#modal").innerHTML = html; $("#modal-backdrop").classList.add("open"); }
+$("#modal-backdrop").addEventListener("click", e => {
+  if (e.target.id === "modal-backdrop") e.target.classList.remove("open");
+});
+
+function bookingModal(payload) {
+  const badges = {airline_direct: ["green", "BEST PROTECTION"], source: ["cyan", "THIS EXACT FARE"],
+                  google_flights: ["yellow", "VERIFY PRICE"]};
+  const items = payload.links.map(l => {
+    const [color, label] = badges[l.kind] ?? ["gray", l.kind];
+    return `<div class="link-item">
+      <span class="badge ${color}">${label}</span> <strong>${esc(l.label)}</strong><br>
+      <span class="links"><a href="${esc(l.url)}" target="_blank" rel="noopener">${esc(l.url)}</a></span>
+      <div class="muted" style="font-size:13px">${esc(l.note)}</div>
+    </div>`;
+  }).join("");
+  openModal(`<h3>Booking options</h3><div class="muted" style="margin-bottom:8px">${esc(payload.context)}</div>
+             ${items || '<div class="empty">No booking links available.</div>'}`);
+}
+
+/* ---------- watches ---------- */
+async function loadWatches() {
+  const el = $("#watch-list");
+  try {
+    const data = await api("/api/v1/watches");
+    if (!data.count) {
+      el.innerHTML = '<div class="empty">No watches yet — add one above.</div>';
+      return;
+    }
+    el.innerHTML = `<table><thead><tr>
+        <th>Route</th><th>Departs</th><th class="num">Target</th><th class="num">Last</th>
+        <th class="num">Lowest</th><th>Checked</th><th></th></tr></thead>
+      <tbody>` + data.watches.map(w => `<tr>
+        <td><strong>${esc(w.origin)} → ${esc(w.destination)}</strong>
+            <span class="muted">${esc(w.cabin_class)}</span></td>
+        <td class="mono">${esc(w.departure_date)}${w.return_date ? " ⇄ " + esc(w.return_date) : ""}</td>
+        <td class="num">${usd(w.target_price_usd)}</td>
+        <td class="num">${usd(w.last_price_usd)}</td>
+        <td class="num">${usd(w.lowest_seen_usd)}</td>
+        <td class="muted">${when(w.last_checked_at)}</td>
+        <td style="white-space:nowrap">
+          <button class="small" onclick="checkWatch('${w.id}', this)">Check now</button>
+          <button class="small" onclick="bookWatch('${w.id}')">Book</button>
+          <button class="small danger" onclick="deleteWatch('${w.id}')">✕</button>
+        </td></tr>`).join("") + "</tbody></table>";
+  } catch (e) { el.innerHTML = `<div class="empty">Failed to load: ${esc(e.message)}</div>`; }
+}
+
+$("#watch-form").addEventListener("submit", async e => {
+  e.preventDefault();
+  const f = new FormData(e.target);
+  const body = {
+    origin: f.get("origin").toUpperCase(), destination: f.get("destination").toUpperCase(),
+    departure_date: f.get("departure_date"), cabin_class: f.get("cabin_class"),
+  };
+  if (f.get("return_date")) body.return_date = f.get("return_date");
+  if (f.get("target_price_usd")) body.target_price_usd = Number(f.get("target_price_usd"));
+  try {
+    const w = await api("/api/v1/watches", {method: "POST", body: JSON.stringify(body)});
+    toast(`Watching ${w.origin} → ${w.destination}`);
+    e.target.reset();
+    loadWatches();
+  } catch (err) { toast(err.message, true); }
+});
+
+window.checkWatch = async (id, btn) => {
+  const orig = btn.textContent;
+  btn.disabled = true; btn.innerHTML = '<span class="spin">◌</span> checking';
+  try {
+    const r = await api(`/api/v1/watches/${id}/check`, {method: "POST"});
+    if (r.deactivated) toast("Watch deactivated — departure date has passed.");
+    else if (r.alert_fired) toast(`🔔 ALERT: ${r.alert.message}`);
+    else toast(`${r.offers_found} offers · cheapest ${usd(r.cheapest_price_usd)} · no alert`);
+    loadWatches(); refreshAlertCount();
+  } catch (err) { toast(err.message, true); }
+  finally { btn.disabled = false; btn.textContent = orig; }
+};
+
+window.bookWatch = async id => {
+  try { bookingModal(await api(`/api/v1/watches/${id}/booking`)); }
+  catch (err) { toast(err.message, true); }
+};
+
+window.deleteWatch = async id => {
+  if (!confirm("Delete this watch?")) return;
+  try { await api(`/api/v1/watches/${id}`, {method: "DELETE"}); loadWatches(); }
+  catch (err) { toast(err.message, true); }
+};
+
+/* ---------- alerts ---------- */
+const KIND_BADGE = {target_hit: "green", price_drop: "green", new_low: "cyan", price_spike: "red"};
+
+async function loadAlerts() {
+  const el = $("#alert-list");
+  const showAcked = $("#alerts-show-acked").checked;
+  try {
+    const data = await api(`/api/v1/watches/alerts?include_acknowledged=${showAcked}`);
+    if (!data.count) {
+      el.innerHTML = '<div class="empty">No alerts — the watch checker runs every 6 hours, or use "Check now".</div>';
+      return;
+    }
+    el.innerHTML = data.alerts.map(a => `
+      <div class="card alert-card ${esc(a.kind)}" style="margin-bottom:10px">
+        <span class="badge ${KIND_BADGE[a.kind] ?? "gray"}">${esc(a.kind.replace("_", " ").toUpperCase())}</span>
+        <strong style="margin-left:8px">${usd(a.price_usd)}</strong>
+        ${a.previous_price_usd ? `<span class="muted">(was ${usd(a.previous_price_usd)})</span>` : ""}
+        <span class="muted" style="float:right">${when(a.created_at)}</span>
+        <div style="margin-top:6px">${esc(a.message)}</div>
+        <div style="margin-top:8px">
+          ${a.acknowledged ? '<span class="badge gray">ACKNOWLEDGED</span>'
+            : `<button class="small" onclick="ackAlert('${a.id}')">Acknowledge</button>`}
+        </div>
+      </div>`).join("");
+  } catch (e) { el.innerHTML = `<div class="empty">Failed to load: ${esc(e.message)}</div>`; }
+}
+$("#alerts-show-acked").addEventListener("change", loadAlerts);
+
+window.ackAlert = async id => {
+  try { await api(`/api/v1/watches/alerts/${id}/ack`, {method: "POST"}); loadAlerts(); refreshAlertCount(); }
+  catch (err) { toast(err.message, true); }
+};
+
+async function refreshAlertCount() {
+  try {
+    const data = await api("/api/v1/watches/alerts");
+    const b = $("#alert-count");
+    b.hidden = !data.count;
+    b.textContent = data.count;
+  } catch { /* header badge is best-effort */ }
+}
+
+/* ---------- search ---------- */
+function segSummary(segs) {
+  return segs.map(s => `${esc(s.origin)}→${esc(s.destination)} ${esc(s.carrier)}${esc(s.flight_no)}`).join(" · ");
+}
+
+$("#search-form").addEventListener("submit", async e => {
+  e.preventDefault();
+  const f = new FormData(e.target);
+  const body = {
+    origin: f.get("origin").toUpperCase(), destination: f.get("destination").toUpperCase(),
+    departure_date: f.get("departure_date"), passengers: Number(f.get("passengers")) || 1,
+    cabin_class: f.get("cabin_class"),
+  };
+  if (f.get("return_date")) body.return_date = f.get("return_date");
+  const btn = $("#search-btn"), card = $("#search-results-card"), out = $("#search-results");
+  btn.disabled = true; btn.innerHTML = '<span class="spin">◌</span> searching';
+  card.hidden = false;
+  out.innerHTML = '<div class="empty">Searching all sources…</div>';
+  try {
+    const data = await api("/api/v1/routes/search", {method: "POST", body: JSON.stringify(body)});
+    $("#search-results-title").textContent =
+      `${data.origin} → ${data.destination} · ${data.offer_count} offers`;
+    if (!data.offer_count) {
+      out.innerHTML = '<div class="empty">No offers found. If no fare-source API keys are configured '
+        + 'in .env (Amadeus / Kiwi / SerpAPI), every search returns empty — check <code>flightdeck health</code>.</div>';
+      return;
+    }
+    out.innerHTML = `<table><thead><tr>
+        <th class="num">Price</th><th>Stops</th><th>Itinerary</th><th>Source</th><th></th>
+      </tr></thead><tbody>` + data.offers.map(o => `<tr>
+        <td class="num"><strong>${usd(o.price_usd)}</strong></td>
+        <td>${o.stops === 0 ? "nonstop" : o.stops + " stop" + (o.stops > 1 ? "s" : "")}</td>
+        <td class="muted" style="font-size:13px">${segSummary(o.segments)}</td>
+        <td><span class="badge gray">${esc(o.source)}</span></td>
+        <td><button class="small" onclick="bookOffer('${o.id}')">Book</button></td>
+      </tr>`).join("") + "</tbody></table>";
+  } catch (err) {
+    out.innerHTML = `<div class="empty">Search failed: ${esc(err.message)}</div>`;
+  } finally { btn.disabled = false; btn.textContent = "Search"; }
+});
+
+window.bookOffer = async id => {
+  try { bookingModal(await api(`/api/v1/offers/${id}/booking`)); }
+  catch (err) { toast(err.message, true); }
+};
+
+/* ---------- timing ---------- */
+const VERDICT_COLOR = {BUY_NOW: "var(--green)", WAIT: "var(--yellow)",
+                       NEUTRAL: "var(--cyan)", TOO_CLOSE_TO_CALL: "var(--muted)"};
+
+$("#timing-form").addEventListener("submit", async e => {
+  e.preventDefault();
+  const f = new FormData(e.target);
+  const params = new URLSearchParams({
+    origin: f.get("origin").toUpperCase(), destination: f.get("destination").toUpperCase(),
+    departure_date: f.get("departure_date"),
+  });
+  if (f.get("current_price")) params.set("current_price", f.get("current_price"));
+  const card = $("#timing-result-card"), out = $("#timing-result");
+  card.hidden = false; out.innerHTML = '<div class="empty">Analyzing…</div>';
+  try {
+    const r = await api("/api/v1/timing/analyze?" + params);
+    const extras = [];
+    if (r.median_price != null) extras.push(`median ${usd(r.median_price)}`);
+    if (r.current_pct_above_median != null)
+      extras.push(`current ${r.current_pct_above_median >= 0 ? "+" : ""}${r.current_pct_above_median.toFixed(1)}% vs median`);
+    extras.push(`${r.sample_count} samples`);
+    out.innerHTML = `
+      <div class="muted">${esc(r.route)} for ${esc(r.departure_date)} (${r.days_until_departure} days out)</div>
+      <div class="verdict" style="color:${VERDICT_COLOR[r.verdict] ?? "inherit"}">${esc(r.verdict)}
+        <span class="muted" style="font-size:14px;font-weight:400">confidence ${(r.confidence * 100).toFixed(0)}%</span>
+      </div>
+      <div style="margin-top:6px">${esc(r.reasoning)}</div>
+      <div class="muted" style="margin-top:8px;font-size:13px">${extras.join(" · ")}</div>`;
+  } catch (err) { out.innerHTML = `<div class="empty">Analysis failed: ${esc(err.message)}</div>`; }
+});
+
+/* ---------- init ---------- */
+loadWatches();
+refreshAlertCount();
+</script>
+</body>
+</html>

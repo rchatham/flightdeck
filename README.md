@@ -17,6 +17,13 @@ make health       # in another terminal — verify all components
 
 See `Makefile` for full command list.
 
+## Web dashboard
+
+`make dev`, then open <http://localhost:8002/> — a single-page dashboard
+(served by the API itself, no separate frontend) for watches, alerts,
+search + booking links, and timing analysis. The JSON API is documented at
+<http://localhost:8002/docs>.
+
 ## Price watches
 
 Track a specific trip and get alerted when the price is right:
