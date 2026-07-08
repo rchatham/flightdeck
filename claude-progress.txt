@@ -1,5 +1,81 @@
 # FlightDeck — session progress log
 
+## Session 2026-07-08 — Points/Rewards, Fares/Settings pages, test expansion
+
+User asked for "a series of tests" + "more full-featured pages" toward a
+"flexible and powerful system for booking and traveling." Scoped to the
+highest-value gaps: points/rewards had a DB model + seed data but ZERO
+API/UI; hidden-fare discovery had a working API but ZERO UI; the web
+dashboard had no system-status visibility and no price-history chart.
+
+Backend:
+- app/services/points.py: points_needed()/estimate_redemptions() — pure,
+  hand-maintained cents-per-point valuations (documented as rough
+  estimates, not gospel) per seeded program, falling back to a default
+  for unknown programs. Sorts sufficient-balance programs first, cheapest-
+  in-points-terms within each group.
+- app/services/health.py: extracted check_postgres()/check_redis() out of
+  the CLI (they were CLI-only) so BOTH `flightdeck health` and the new web
+  Settings tab share one implementation instead of duplicating it.
+- API: GET/PATCH /api/v1/points/{id}, POST /api/v1/points/estimate,
+  GET /api/v1/system/status (postgres/redis health + key/notification
+  presence booleans — never secret values, since browser JS can't read
+  .env the way the CLI does).
+- CLI: `flightdeck points list/partners/set-balance/estimate` — accepts
+  either a program UUID or a case-insensitive name substring (typing a
+  UUID for 4 seeded programs is needless friction).
+- Bugfix caught in passing: DealScanRequest silently accepted date_to <
+  date_from (sample_dates() swapped it internally without telling the
+  caller). Added a model_validator that rejects it explicitly.
+
+Web dashboard — 3 new tabs, 2 enhanced:
+- Fares tab: wraps the pre-existing /api/v1/fares/hidden endpoint, which
+  had zero UI until now. Risk-colored opportunity cards, flags, booking
+  steps, "get off at X not Y" warning.
+- Points tab: balances (editable inline), transfer-partner tables
+  (collapsible), and a redemption-estimate calculator.
+- Settings tab: live Postgres/Redis/API-key/notification status via the
+  new system-status endpoint.
+- Timing tab: added an inline SVG price-history sparkline (no chart
+  library — hand-rolled polyline + area fill) beneath the verdict, using
+  the same date-pinned-then-any-date fallback as analyze_route() so the
+  chart never contradicts the verdict above it.
+- Search tab: "+ Watch" button per result row, prefilling the watch's
+  target price at the exact offer price found.
+
+Two real bugs caught during live browser verification (not just written,
+actually exercised in the preview):
+1. Duplicate `const RISK_BADGE` declaration (Deals tab already had one) —
+   would have thrown SyntaxError and broken the ENTIRE page on load, not
+   just the Fares tab. Caught by a `node --check` syntax pass before ever
+   touching the browser.
+2. Sparkline x-axis collapsed to a single point when all price_history
+   rows shared one recorded_at timestamp (Postgres now() is constant
+   within one transaction — hit when seeding test data in one commit,
+   but a real edge case for any batch-inserted history). Fixed with an
+   index-spacing fallback when the time span is zero.
+
+Tests — 173 total (66 new this session):
+- tests/test_points.py: pure valuation/estimate logic (14 tests)
+- tests/test_schemas.py: Pydantic validation across search/watches/deals/
+  fares/points schemas — including the new date-order validator (27 tests)
+- tests/test_cli_rendering.py: Rich Console-capture smoke tests for every
+  CLI render function across 8 command modules (25 tests) — these exist
+  because a bad dict-key access or format spec in a render function is
+  invisible to API/service tests but breaks the CLI outright. Discovered
+  Rich's Console resolves sys.stdout dynamically at write time, so
+  pytest's capsys captures it with zero monkeypatching.
+- tests/test_web.py: extended the API-path guard to cover the 3 new tabs.
+
+All verified live in the browser preview (not just curl/CLI): Points
+balance edit + partners toggle + estimate calculator, Fares risk cards
+via a stubbed response, Settings status table, Timing sparkline (both the
+degenerate and normal-spread cases), Search "+ Watch" round-tripped
+through the real API. Synthetic test data cleaned up afterward.
+
+State: 173 passed. Lint: only the pre-accepted B008 pattern in touched
+files (58 pre-existing baseline violations elsewhere, unchanged).
+
 ## Session 2026-07-07 — Bugfix: unseeded IATA codes 404'd in deals scan
 
 Reported: `flightdeck deals scan MGA ...` → "404: could not resolve 'MGA'

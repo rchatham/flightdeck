@@ -20,9 +20,10 @@ See `Makefile` for full command list.
 ## Web dashboard
 
 `make dev`, then open <http://localhost:8002/> — a single-page dashboard
-(served by the API itself, no separate frontend) for watches, alerts,
-search + booking links, and timing analysis. The JSON API is documented at
-<http://localhost:8002/docs>.
+(served by the API itself, no separate frontend) covering watches, alerts,
+search + booking links, deal scans, hacker fares, points/rewards, timing
+analysis (with a price-history chart), and system status. The JSON API is
+documented at <http://localhost:8002/docs>.
 
 ## Price watches
 
@@ -72,6 +73,29 @@ Google Flights price check):
 ```bash
 flightdeck book <OFFER_ID>          # offer ids come from `flightdeck search`
 flightdeck watch book <WATCH_ID>    # book a watched trip after an alert
+```
+
+## Points & rewards
+
+Track transferable-points balances and see what a fare would cost in points
+across your programs, ranked by sufficient-balance-first then cheapest in
+points terms. Valuations are rough, hand-maintained estimates — see
+`app/services/points.py` to recalibrate them.
+
+```bash
+flightdeck points list                        # balances (seeded: Chase/Amex/Citi/Cap1)
+flightdeck points set-balance chase 85000      # name substring or UUID both work
+flightdeck points partners chase               # transfer partners + ratios
+flightdeck points estimate 750                 # points needed for a $750 fare
+```
+
+## Hacker fares
+
+Hidden-city and split-ticket discovery, risk-scored by Hook 3
+(`app/services/fare_risks.py`):
+
+```bash
+flightdeck fares hidden SFO NRT 2026-09-15 --strategies hidden_city,split_ticket
 ```
 
 ## Ports

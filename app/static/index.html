@@ -86,7 +86,10 @@
   <button data-tab="alerts">Alerts <span id="alert-count" class="badge red" hidden>0</span></button>
   <button data-tab="search">Search</button>
   <button data-tab="deals">Deals</button>
+  <button data-tab="fares">Fares</button>
+  <button data-tab="points">Points</button>
   <button data-tab="timing">Timing</button>
+  <button data-tab="settings">Settings</button>
 </nav>
 
 <main>
@@ -187,6 +190,58 @@
     </div>
   </section>
 
+  <!-- ===================== Fares ===================== -->
+  <section id="tab-fares">
+    <div class="card">
+      <h2>Hacker fares — hidden-city &amp; split-ticket</h2>
+      <div class="muted" style="font-size:13px;margin-bottom:10px">
+        Unconventional booking strategies that can beat the normal fare — each comes with
+        a risk assessment. Read the warnings before booking.
+      </div>
+      <form class="row" id="fares-form">
+        <label>Origin <input name="origin" placeholder="SFO" maxlength="3" required></label>
+        <label>Destination <input name="destination" placeholder="NRT" maxlength="3" required></label>
+        <label>Depart <input name="departure_date" type="date" required></label>
+        <label>Return (opt) <input name="return_date" type="date"></label>
+        <label>Passengers <input name="passengers" type="number" value="1" min="1" max="9"></label>
+        <label style="flex-direction:row;align-items:center;gap:6px;padding-bottom:8px">
+          <input type="checkbox" name="hidden_city" checked style="width:auto"> hidden-city
+        </label>
+        <label style="flex-direction:row;align-items:center;gap:6px;padding-bottom:8px">
+          <input type="checkbox" name="split_ticket" checked style="width:auto"> split-ticket
+        </label>
+        <label style="flex-direction:row;align-items:center;gap:6px;padding-bottom:8px">
+          <input type="checkbox" name="has_checked_bag" style="width:auto"> checking a bag
+        </label>
+        <button class="primary" id="fares-btn">Find fares</button>
+      </form>
+    </div>
+    <div class="card" id="fares-results-card" hidden>
+      <h2 id="fares-results-title">Opportunities</h2>
+      <div id="fares-results"></div>
+    </div>
+  </section>
+
+  <!-- ===================== Points ===================== -->
+  <section id="tab-points">
+    <div class="card">
+      <h2>Points &amp; rewards balances</h2>
+      <div id="points-list"><div class="empty">Loading…</div></div>
+    </div>
+    <div class="card">
+      <h2>What would this cost in points?</h2>
+      <div class="muted" style="font-size:13px;margin-bottom:10px">
+        Ranks your programs by points needed, sufficient balances first. Valuations are
+        rough hand-maintained estimates — see <code>app/services/points.py</code>.
+      </div>
+      <form class="row" id="points-estimate-form">
+        <label>Cash price $ <input name="cash_price_usd" type="number" min="0" step="1" required></label>
+        <button class="primary">Estimate</button>
+      </form>
+      <div id="points-estimate-result" style="margin-top:12px"></div>
+    </div>
+  </section>
+
   <!-- ===================== Timing ===================== -->
   <section id="tab-timing">
     <div class="card">
@@ -201,6 +256,14 @@
     </div>
     <div class="card" id="timing-result-card" hidden>
       <div id="timing-result"></div>
+    </div>
+  </section>
+
+  <!-- ===================== Settings ===================== -->
+  <section id="tab-settings">
+    <div class="card">
+      <h2>System status</h2>
+      <div id="settings-status"><div class="empty">Loading…</div></div>
     </div>
   </section>
 </main>
@@ -243,6 +306,8 @@ $$("nav button").forEach(btn => btn.addEventListener("click", () => {
   $$("main section").forEach(s => s.classList.toggle("active", s.id === "tab-" + btn.dataset.tab));
   if (btn.dataset.tab === "watches") loadWatches();
   if (btn.dataset.tab === "alerts") loadAlerts();
+  if (btn.dataset.tab === "points") loadPoints();
+  if (btn.dataset.tab === "settings") loadSettings();
 }));
 
 /* ---------- modal ---------- */
@@ -382,6 +447,10 @@ function segSummary(segs) {
   return segs.map(s => `${esc(s.origin)}→${esc(s.destination)} ${esc(s.carrier)}${esc(s.flight_no)}`).join(" · ");
 }
 
+// Set right before rendering results; "+ Watch" reuses these exact search
+// params so the watch matches what was actually searched (route, dates, cabin).
+let lastSearchParams = null;
+
 $("#search-form").addEventListener("submit", async e => {
   e.preventDefault();
   const f = new FormData(e.target);
@@ -404,6 +473,10 @@ $("#search-form").addEventListener("submit", async e => {
         + 'in .env (Amadeus / Kiwi / SerpAPI), every search returns empty — check <code>flightdeck health</code>.</div>';
       return;
     }
+    lastSearchParams = {
+      origin: body.origin, destination: body.destination, departure_date: body.departure_date,
+      return_date: body.return_date || null, cabin_class: body.cabin_class,
+    };
     out.innerHTML = `<table><thead><tr>
         <th class="num">Price</th><th>Stops</th><th>Itinerary</th><th>Source</th><th></th>
       </tr></thead><tbody>` + data.offers.map(o => `<tr>
@@ -411,7 +484,10 @@ $("#search-form").addEventListener("submit", async e => {
         <td>${o.stops === 0 ? "nonstop" : o.stops + " stop" + (o.stops > 1 ? "s" : "")}</td>
         <td class="muted" style="font-size:13px">${segSummary(o.segments)}</td>
         <td><span class="badge gray">${esc(o.source)}</span></td>
-        <td><button class="small" onclick="bookOffer('${o.id}')">Book</button></td>
+        <td style="white-space:nowrap">
+          <button class="small" onclick="bookOffer('${o.id}')">Book</button>
+          <button class="small" onclick="watchOffer('${o.price_usd}')">+ Watch</button>
+        </td>
       </tr>`).join("") + "</tbody></table>";
   } catch (err) {
     out.innerHTML = `<div class="empty">Search failed: ${esc(err.message)}</div>`;
@@ -421,6 +497,15 @@ $("#search-form").addEventListener("submit", async e => {
 window.bookOffer = async id => {
   try { bookingModal(await api(`/api/v1/offers/${id}/booking`)); }
   catch (err) { toast(err.message, true); }
+};
+
+window.watchOffer = async priceStr => {
+  if (!lastSearchParams) return;
+  const body = {...lastSearchParams, target_price_usd: Number(priceStr)};
+  try {
+    const w = await api("/api/v1/watches", {method: "POST", body: JSON.stringify(body)});
+    toast(`Watching ${w.origin} → ${w.destination} at or below ${usd(w.target_price_usd)}`);
+  } catch (err) { toast(err.message, true); }
 };
 
 /* ---------- deals ---------- */
@@ -438,7 +523,10 @@ function bookingLinksInline(links) {
   }).join("");
 }
 
-const RISK_BADGE = {LOW: "green", MEDIUM: "yellow", HIGH: "red", EXTREME: "red"};
+// Shared with the Fares tab below — same RiskLevel values (LOW/MEDIUM/HIGH/
+// EXTREME/DISQUALIFIED) drive both deal-scan hacker-fare cards and the
+// dedicated Fares tab.
+const RISK_BADGE = {LOW: "green", MEDIUM: "yellow", HIGH: "red", EXTREME: "red", DISQUALIFIED: "gray"};
 
 $("#deals-form").addEventListener("submit", async e => {
   e.preventDefault();
@@ -506,6 +594,131 @@ $("#deals-form").addEventListener("submit", async e => {
   } finally { btn.disabled = false; btn.textContent = "Scan"; }
 });
 
+/* ---------- fares ---------- */
+const RISK_BORDER = {green: "var(--green)", yellow: "var(--yellow)", red: "var(--red)", gray: "var(--muted)"};
+
+$("#fares-form").addEventListener("submit", async e => {
+  e.preventDefault();
+  const f = new FormData(e.target);
+  const strategies = [];
+  if (f.get("hidden_city")) strategies.push("hidden_city");
+  if (f.get("split_ticket")) strategies.push("split_ticket");
+  const body = {
+    origin: f.get("origin").toUpperCase(), destination: f.get("destination").toUpperCase(),
+    departure_date: f.get("departure_date"), passengers: Number(f.get("passengers")) || 1,
+    strategies, has_checked_bag: f.get("has_checked_bag") === "on",
+  };
+  if (f.get("return_date")) body.return_date = f.get("return_date");
+  const btn = $("#fares-btn"), card = $("#fares-results-card"), out = $("#fares-results");
+  btn.disabled = true; btn.innerHTML = '<span class="spin">◌</span> searching';
+  card.hidden = false;
+  out.innerHTML = '<div class="empty">Searching hidden-fare opportunities…</div>';
+  try {
+    const r = await api("/api/v1/fares/hidden", {method: "POST", body: JSON.stringify(body)});
+    $("#fares-results-title").textContent =
+      `${r.origin} → ${r.destination} · ${r.opportunity_count} found` +
+      (r.direct_price_usd != null ? ` (direct fare ${usd(r.direct_price_usd)})` : "");
+    if (!r.opportunity_count) {
+      out.innerHTML = '<div class="empty">No hidden-fare opportunities found for this search.</div>';
+      return;
+    }
+    out.innerHTML = r.opportunities.map(o => {
+      const color = RISK_BADGE[o.overall_risk] ?? "gray";
+      const flags = o.risk_flags.map(fl =>
+        `<li><span class="badge ${RISK_BADGE[fl.severity] ?? "gray"}">${esc(fl.severity)}</span> ${esc(fl.description)}</li>`
+      ).join("");
+      const steps = o.booking_steps.map(s => `<li>${esc(s)}</li>`).join("");
+      const warn = o.real_destination !== o.final_destination
+        ? `<div style="margin-top:8px;font-weight:600;color:var(--yellow)">⚠ Get off at
+           ${esc(o.real_destination)}, NOT ${esc(o.final_destination)}</div>` : "";
+      return `<div class="card" style="border-left:4px solid ${RISK_BORDER[color]};margin-bottom:12px">
+        <span class="badge ${color}">${esc(o.overall_risk)} RISK</span>
+        <strong style="margin-left:8px">${esc(o.strategy.replace("_", " "))}</strong>
+        — <strong>${usd(o.price_usd)}</strong>
+        <span class="muted">(save ${usd(o.savings_usd)}, ${o.savings_pct.toFixed(1)}%)</span>
+        <div class="muted" style="margin-top:6px">${esc(o.risk_reasoning)}</div>
+        ${flags ? `<div style="margin-top:8px"><strong style="font-size:13px">Risks:</strong>
+          <ul style="margin:4px 0 0;padding-left:20px;font-size:13.5px">${flags}</ul></div>` : ""}
+        ${steps ? `<div style="margin-top:8px"><strong style="font-size:13px">How to book:</strong>
+          <ol style="margin:4px 0 0;padding-left:20px;font-size:13.5px">${steps}</ol></div>` : ""}
+        ${warn}
+      </div>`;
+    }).join("");
+  } catch (err) {
+    out.innerHTML = `<div class="empty">Search failed: ${esc(err.message)}</div>`;
+  } finally { btn.disabled = false; btn.textContent = "Find fares"; }
+});
+
+/* ---------- points ---------- */
+async function loadPoints() {
+  const el = $("#points-list");
+  el.innerHTML = '<div class="empty">Loading…</div>';
+  try {
+    const data = await api("/api/v1/points");
+    if (!data.count) {
+      el.innerHTML = '<div class="empty">No points programs seeded. Run `flightdeck db seed`.</div>';
+      return;
+    }
+    el.innerHTML = data.programs.map(p => `
+      <div class="card" style="margin-bottom:10px">
+        <strong>${esc(p.program_name)}</strong> <span class="muted">${esc(p.card_name || "")}</span>
+        <div style="margin-top:8px;display:flex;gap:8px;align-items:center">
+          <input type="number" min="0" step="1000" value="${p.balance}" id="bal-${p.id}" style="width:140px">
+          <button class="small" onclick="savePointsBalance('${p.id}')">Save</button>
+          <span class="muted" style="font-size:13px">${p.transfer_partners.length} transfer partners</span>
+          <button class="small" onclick="togglePartners('${p.id}')" style="margin-left:auto">Partners ▾</button>
+        </div>
+        <div id="partners-${p.id}" hidden style="margin-top:10px">${partnersTable(p.transfer_partners)}</div>
+      </div>`).join("");
+  } catch (e) { el.innerHTML = `<div class="empty">Failed to load: ${esc(e.message)}</div>`; }
+}
+
+function partnersTable(partners) {
+  if (!partners.length) return '<div class="muted">No transfer partners on file.</div>';
+  return `<table><thead><tr><th>Airline</th><th>IATA</th><th>Ratio</th>
+      <th class="num">Bonus</th></tr></thead><tbody>` +
+    partners.map(tp => `<tr><td>${esc(tp.airline)}</td><td>${esc(tp.iata)}</td>
+      <td>${esc(tp.ratio)}</td>
+      <td class="num">${tp.bonus_pct ? "+" + tp.bonus_pct + "%" : "—"}</td></tr>`).join("") +
+    "</tbody></table>";
+}
+
+window.togglePartners = id => { const el = $(`#partners-${id}`); el.hidden = !el.hidden; };
+
+window.savePointsBalance = async id => {
+  const val = Number($(`#bal-${id}`).value) || 0;
+  try {
+    await api(`/api/v1/points/${id}`, {method: "PATCH", body: JSON.stringify({balance: val})});
+    toast("Balance updated.");
+  } catch (err) { toast(err.message, true); }
+};
+
+$("#points-estimate-form").addEventListener("submit", async e => {
+  e.preventDefault();
+  const f = new FormData(e.target);
+  const out = $("#points-estimate-result");
+  out.innerHTML = '<div class="empty">Estimating…</div>';
+  try {
+    const r = await api("/api/v1/points/estimate", {
+      method: "POST", body: JSON.stringify({cash_price_usd: Number(f.get("cash_price_usd"))}),
+    });
+    if (!r.estimates.length) {
+      out.innerHTML = '<div class="empty">No points programs to estimate against.</div>';
+      return;
+    }
+    out.innerHTML = `<table><thead><tr><th>Program</th><th class="num">Value</th>
+        <th class="num">Points needed</th><th class="num">Balance</th><th>Status</th></tr></thead>
+      <tbody>` + r.estimates.map(est => `<tr>
+        <td>${esc(est.program_name)}</td>
+        <td class="num">${est.cents_per_point.toFixed(2)}¢/pt</td>
+        <td class="num">${est.points_needed.toLocaleString()}</td>
+        <td class="num">${est.balance.toLocaleString()}</td>
+        <td>${est.sufficient ? '<span class="badge green">✓ enough</span>'
+                             : `<span class="badge red">short ${est.shortfall.toLocaleString()}</span>`}</td>
+      </tr>`).join("") + "</tbody></table>";
+  } catch (err) { out.innerHTML = `<div class="empty">Failed: ${esc(err.message)}</div>`; }
+});
+
 /* ---------- timing ---------- */
 const VERDICT_COLOR = {BUY_NOW: "var(--green)", WAIT: "var(--yellow)",
                        NEUTRAL: "var(--cyan)", TOO_CLOSE_TO_CALL: "var(--muted)"};
@@ -513,10 +726,9 @@ const VERDICT_COLOR = {BUY_NOW: "var(--green)", WAIT: "var(--yellow)",
 $("#timing-form").addEventListener("submit", async e => {
   e.preventDefault();
   const f = new FormData(e.target);
-  const params = new URLSearchParams({
-    origin: f.get("origin").toUpperCase(), destination: f.get("destination").toUpperCase(),
-    departure_date: f.get("departure_date"),
-  });
+  const origin = f.get("origin").toUpperCase(), destination = f.get("destination").toUpperCase();
+  const departureDate = f.get("departure_date");
+  const params = new URLSearchParams({origin, destination, departure_date: departureDate});
   if (f.get("current_price")) params.set("current_price", f.get("current_price"));
   const card = $("#timing-result-card"), out = $("#timing-result");
   card.hidden = false; out.innerHTML = '<div class="empty">Analyzing…</div>';
@@ -533,9 +745,101 @@ $("#timing-form").addEventListener("submit", async e => {
         <span class="muted" style="font-size:14px;font-weight:400">confidence ${(r.confidence * 100).toFixed(0)}%</span>
       </div>
       <div style="margin-top:6px">${esc(r.reasoning)}</div>
-      <div class="muted" style="margin-top:8px;font-size:13px">${extras.join(" · ")}</div>`;
+      <div class="muted" style="margin-top:8px;font-size:13px">${extras.join(" · ")}</div>
+      <div id="timing-chart" style="margin-top:14px"><div class="empty">Loading price history…</div></div>`;
+    loadTimingChart(origin, destination, departureDate);
   } catch (err) { out.innerHTML = `<div class="empty">Analysis failed: ${esc(err.message)}</div>`; }
 });
+
+async function loadTimingChart(origin, destination, departureDate) {
+  const el = $("#timing-chart");
+  try {
+    // Date-pinned history first (what this exact departure date has seen);
+    // fall back to any-date history for the route, matching analyze_route()'s
+    // own fallback so the chart never contradicts the verdict above it.
+    let data = await api("/api/v1/timing/history?route_key=" +
+      encodeURIComponent(`${origin}-${destination}:${departureDate}`));
+    if (!data.point_count) {
+      data = await api("/api/v1/timing/history?route_key=" +
+        encodeURIComponent(`${origin}-${destination}`));
+    }
+    if (!data.point_count) {
+      el.innerHTML = '<div class="empty">No price history yet — run a Deals scan or watch this '
+        + 'route to start collecting it.</div>';
+      return;
+    }
+    el.innerHTML = `<div class="muted" style="font-size:12px;margin-bottom:4px">
+        ${data.point_count} price points · ${esc(data.route_key)}</div>` + buildSparkline(data.points);
+  } catch (e) { el.innerHTML = `<div class="empty">Failed to load history: ${esc(e.message)}</div>`; }
+}
+
+function buildSparkline(points) {
+  const W = 640, H = 160, PAD = 30;
+  const times = points.map(p => new Date(p.recorded_at).getTime());
+  const prices = points.map(p => Number(p.price_usd));
+  const tMin = Math.min(...times), tMax = Math.max(...times);
+  const pMin = Math.min(...prices), pMax = Math.max(...prices);
+  const pSpan = (pMax - pMin) || 1;
+  // Rows written in the same transaction share one recorded_at (Postgres
+  // now() is constant per-transaction) — a real-time x-axis would collapse
+  // them onto a single point, so fall back to even index spacing.
+  const byTime = tMax > tMin;
+  const tSpan = tMax - tMin || 1;
+  const x = (t, i) => PAD + (byTime ? (t - tMin) / tSpan : (points.length > 1 ? i / (points.length - 1) : 0))
+    * (W - PAD * 2);
+  const y = p => H - PAD - ((p - pMin) / pSpan) * (H - PAD * 2);
+  const coords = points.map((p, i) => [x(times[i], i), y(prices[i])]);
+  const line = coords.map((c, i) => (i === 0 ? "M" : "L") + c[0].toFixed(1) + "," + c[1].toFixed(1)).join(" ");
+  const area = `${line} L${coords[coords.length - 1][0].toFixed(1)},${H - PAD} L${coords[0][0].toFixed(1)},${H - PAD} Z`;
+  const minIdx = prices.indexOf(pMin);
+  const dots = coords.map((c, i) =>
+    `<circle cx="${c[0].toFixed(1)}" cy="${c[1].toFixed(1)}" r="${i === minIdx ? 4 : 2.5}"
+             fill="${i === minIdx ? "#16a34a" : "#2563eb"}" />`
+  ).join("");
+  const fmtDate = t => new Date(t).toLocaleDateString(undefined, {month: "short", day: "numeric"});
+  return `<svg viewBox="0 0 ${W} ${H}" style="width:100%;height:160px" preserveAspectRatio="none">
+    <path d="${area}" fill="#2563eb" opacity="0.08" stroke="none" />
+    <path d="${line}" fill="none" stroke="#2563eb" stroke-width="2" />
+    ${dots}
+    <text x="${PAD}" y="14" font-size="11" fill="#6b7486">${usd(pMax)}</text>
+    <text x="${PAD}" y="${H - PAD + 16}" font-size="11" fill="#6b7486">${usd(pMin)} (lowest)</text>
+    <text x="${PAD}" y="${H - 6}" font-size="11" fill="#6b7486">${esc(fmtDate(tMin))}</text>
+    <text x="${W - PAD}" y="${H - 6}" font-size="11" fill="#6b7486" text-anchor="end">${esc(fmtDate(tMax))}</text>
+  </svg>`;
+}
+
+/* ---------- settings ---------- */
+function statusRow(label, ok, detail) {
+  const badge = ok ? '<span class="badge green">OK</span>' : '<span class="badge red">missing</span>';
+  return `<tr><td>${esc(label)}</td><td>${badge}</td>
+    <td class="muted" style="font-size:13px">${esc(detail || "")}</td></tr>`;
+}
+
+async function loadSettings() {
+  const el = $("#settings-status");
+  el.innerHTML = '<div class="empty">Checking…</div>';
+  try {
+    const s = await api("/api/v1/system/status");
+    const rows = [
+      statusRow("Postgres", s.postgres.status === "ok", s.postgres.detail),
+      statusRow("Redis", s.redis.status === "ok", s.redis.detail),
+      statusRow("Amadeus API key", s.fare_sources.amadeus,
+                s.fare_sources.amadeus ? "configured" : "set AMADEUS_API_KEY + AMADEUS_API_SECRET in .env"),
+      statusRow("Kiwi API key", s.fare_sources.kiwi,
+                s.fare_sources.kiwi ? "configured" : "set KIWI_API_KEY in .env"),
+      statusRow("SerpAPI key", s.fare_sources.serpapi,
+                s.fare_sources.serpapi ? "configured" : "set SERPAPI_API_KEY in .env"),
+      statusRow("ntfy push", s.notifications.ntfy,
+                s.notifications.ntfy ? "configured" : "set FLIGHTDECK_NTFY_TOPIC in .env"),
+      statusRow("Alert webhook", s.notifications.webhook,
+                s.notifications.webhook ? "configured" : "set FLIGHTDECK_ALERT_WEBHOOK_URL in .env"),
+    ].join("");
+    el.innerHTML = `<table><thead><tr><th>Component</th><th>Status</th><th>Detail</th></tr></thead>
+      <tbody>${rows}</tbody></table>
+      <div class="muted" style="margin-top:10px;font-size:13px">Without fare-source keys, every
+      search returns 0 offers. Restart the API after editing .env.</div>`;
+  } catch (e) { el.innerHTML = `<div class="empty">Failed to load: ${esc(e.message)}</div>`; }
+}
 
 /* ---------- init ---------- */
 loadWatches();
