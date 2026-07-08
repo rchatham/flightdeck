@@ -5,33 +5,11 @@ import asyncio
 
 import click
 import httpx
-import redis.asyncio as redis_asyncio
-from sqlalchemy import text
 
 from app.cli.client import APIClient
 from app.cli.output import console, emit, status_table
 from app.config import get_settings
-from app.db import get_engine
-
-
-async def _check_postgres() -> tuple[str, str]:
-    try:
-        engine = get_engine()
-        async with engine.connect() as conn:
-            await conn.execute(text("SELECT 1"))
-        return "ok", get_settings().database_url.split("@")[-1]
-    except Exception as e:  # noqa: BLE001
-        return "error", str(e)[:120]
-
-
-async def _check_redis() -> tuple[str, str]:
-    try:
-        client = redis_asyncio.from_url(get_settings().redis_url)
-        await client.ping()
-        await client.aclose()
-        return "ok", get_settings().redis_url
-    except Exception as e:  # noqa: BLE001
-        return "error", str(e)[:120]
+from app.services.health import check_postgres, check_redis
 
 
 def _check_api(api_url: str | None) -> tuple[str, str]:
@@ -62,8 +40,8 @@ def _check_api_keys() -> list[tuple[str, str, str]]:
 
 
 async def _gather_checks(api_url: str | None) -> dict:
-    pg_status, pg_detail = await _check_postgres()
-    redis_status, redis_detail = await _check_redis()
+    pg_status, pg_detail = await check_postgres()
+    redis_status, redis_detail = await check_redis()
     api_status, api_detail = _check_api(api_url)
     keys = _check_api_keys()
     return {

@@ -9,6 +9,7 @@ from app.cli.commands.db import db_cmd
 from app.cli.commands.deals import deals_cmd
 from app.cli.commands.fares import fares_cmd
 from app.cli.commands.health import health_cmd
+from app.cli.commands.points import points_cmd
 from app.cli.commands.scrape import scrape_cmd
 from app.cli.commands.search import search_cmd
 from app.cli.commands.timing import timing_cmd
@@ -20,7 +21,7 @@ from app.cli.commands.watch import watch_cmd
     "--api-url",
     envvar="FLIGHTDECK_CLI_API_URL",
     default=None,
-    help="Override the API base URL (default: http://localhost:8001).",
+    help="Override the API base URL (default: http://localhost:8002).",
 )
 @click.pass_context
 def cli(ctx: click.Context, api_url: str | None) -> None:
@@ -37,6 +38,7 @@ cli.add_command(fares_cmd)
 cli.add_command(watch_cmd)
 cli.add_command(book_cmd)
 cli.add_command(deals_cmd)
+cli.add_command(points_cmd)
 
 
 if __name__ == "__main__":

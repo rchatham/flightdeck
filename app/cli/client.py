@@ -25,6 +25,9 @@ class APIClient:
     def put(self, path: str, **kwargs) -> httpx.Response:
         return self._client.put(path, **kwargs)
 
+    def patch(self, path: str, **kwargs) -> httpx.Response:
+        return self._client.patch(path, **kwargs)
+
     def delete(self, path: str, **kwargs) -> httpx.Response:
         return self._client.delete(path, **kwargs)
 
