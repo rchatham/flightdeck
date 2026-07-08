@@ -3,6 +3,7 @@ name = "flightdeck"
 version = "0.1.0"
 description = "Flight search, analysis, and price tracking system"
 readme = "README.md"
+license = "MIT"
 requires-python = ">=3.12"
 dependencies = [
     "fastapi>=0.115.0",

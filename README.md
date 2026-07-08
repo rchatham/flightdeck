@@ -83,3 +83,7 @@ To avoid collisions with other local services, FlightDeck uses non-default ports
 | API | 8002 | 8000 business-agent, 8001 hermes |
 | Postgres | 5434 | 5432/5433 used by other projects |
 | Redis | 6382 | 6379-6381 used by other projects |
+
+## License
+
+[MIT](LICENSE)
