@@ -24,7 +24,8 @@ def test_dashboard_served_at_root():
     assert "FlightDeck" in resp.text
     # The page drives the real API endpoints — keep these paths in sync.
     for path in ("/api/v1/watches", "/api/v1/routes/search", "/api/v1/timing/analyze",
-                 "/api/v1/deals/scan"):
+                 "/api/v1/timing/history", "/api/v1/deals/scan", "/api/v1/fares/hidden",
+                 "/api/v1/points", "/api/v1/system/status"):
         assert path in resp.text
 
 
