@@ -3,12 +3,12 @@ from __future__ import annotations
 
 from datetime import date
 from decimal import Decimal
+from typing import Self
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 from app.api.schemas.booking import BookingLinkOut
 from app.api.schemas.search import CabinClass
-
 
 # --- Airports / location resolution ------------------------------------------
 
@@ -43,6 +43,15 @@ class DealScanRequest(BaseModel):
                               description="Cap on live fan-outs (each hits every source)")
     include_nearby: bool = True
     include_hacker_fares: bool = False
+
+    @model_validator(mode="after")
+    def _date_range_ordered(self) -> Self:
+        # scan_deals()/sample_dates() would silently swap a backwards range —
+        # reject it here instead so the caller gets an explicit error rather
+        # than a scan whose dates don't match what they asked for.
+        if self.date_to < self.date_from:
+            raise ValueError("date_to must be on or after date_from")
+        return self
 
 
 class DateBestOut(BaseModel):
