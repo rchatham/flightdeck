@@ -51,7 +51,7 @@ class KiwiClient:
     async def aclose(self) -> None:
         await self._client.aclose()
 
-    async def __aenter__(self) -> "KiwiClient":
+    async def __aenter__(self) -> KiwiClient:
         return self
 
     async def __aexit__(self, *exc_info) -> None:
@@ -62,18 +62,21 @@ class KiwiClient:
             raise KiwiError(
                 "KIWI_API_KEY not configured. Set it in .env to call the Kiwi API."
             )
-        async for attempt in AsyncRetrying(
-            stop=stop_after_attempt(3),
-            wait=wait_exponential(multiplier=0.5, max=4.0),
-            retry=retry_if_exception_type((httpx.TransportError, httpx.HTTPStatusError)),
-            reraise=True,
-        ):
-            with attempt:
-                resp = await self._client.get(
-                    path, params=params, headers={"apikey": self.api_key}
-                )
-                resp.raise_for_status()
-                return resp.json()
+        try:
+            async for attempt in AsyncRetrying(
+                stop=stop_after_attempt(3),
+                wait=wait_exponential(multiplier=0.5, max=4.0),
+                retry=retry_if_exception_type((httpx.TransportError, httpx.HTTPStatusError)),
+                reraise=True,
+            ):
+                with attempt:
+                    resp = await self._client.get(
+                        path, params=params, headers={"apikey": self.api_key}
+                    )
+                    resp.raise_for_status()
+                    return resp.json()
+        except (httpx.TransportError, httpx.HTTPStatusError) as e:
+            raise KiwiError(f"Kiwi request failed: {e}") from e
         raise KiwiError("unreachable")  # pragma: no cover
 
     async def search_flight_offers(
@@ -139,8 +142,12 @@ def _normalize_offer(raw: dict) -> NormalizedOffer:
     total_duration_secs = 0
 
     for seg in raw.get("route", []):
-        depart = datetime.fromisoformat(seg["local_departure"].replace("Z", "+00:00")).replace(tzinfo=None)
-        arrive = datetime.fromisoformat(seg["local_arrival"].replace("Z", "+00:00")).replace(tzinfo=None)
+        depart = datetime.fromisoformat(
+            seg["local_departure"].replace("Z", "+00:00")
+        ).replace(tzinfo=None)
+        arrive = datetime.fromisoformat(
+            seg["local_arrival"].replace("Z", "+00:00")
+        ).replace(tzinfo=None)
         seg_duration = arrive - depart
         total_duration_secs += int(seg_duration.total_seconds())
         segments.append(

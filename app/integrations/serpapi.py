@@ -51,7 +51,7 @@ class SerpApiClient:
     async def aclose(self) -> None:
         await self._client.aclose()
 
-    async def __aenter__(self) -> "SerpApiClient":
+    async def __aenter__(self) -> SerpApiClient:
         return self
 
     async def __aexit__(self, *exc_info) -> None:
@@ -63,16 +63,19 @@ class SerpApiClient:
                 "SERPAPI_API_KEY not configured. Set it in .env to call SerpAPI."
             )
         params = {**params, "api_key": self.api_key}
-        async for attempt in AsyncRetrying(
-            stop=stop_after_attempt(3),
-            wait=wait_exponential(multiplier=0.5, max=4.0),
-            retry=retry_if_exception_type((httpx.TransportError, httpx.HTTPStatusError)),
-            reraise=True,
-        ):
-            with attempt:
-                resp = await self._client.get("/search", params=params)
-                resp.raise_for_status()
-                return resp.json()
+        try:
+            async for attempt in AsyncRetrying(
+                stop=stop_after_attempt(3),
+                wait=wait_exponential(multiplier=0.5, max=4.0),
+                retry=retry_if_exception_type((httpx.TransportError, httpx.HTTPStatusError)),
+                reraise=True,
+            ):
+                with attempt:
+                    resp = await self._client.get("/search", params=params)
+                    resp.raise_for_status()
+                    return resp.json()
+        except (httpx.TransportError, httpx.HTTPStatusError) as e:
+            raise SerpApiError(f"SerpAPI request failed: {e}") from e
         raise SerpApiError("unreachable")  # pragma: no cover
 
     async def search_flight_offers(

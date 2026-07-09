@@ -61,7 +61,7 @@ class AmadeusClient:
     async def aclose(self) -> None:
         await self._client.aclose()
 
-    async def __aenter__(self) -> "AmadeusClient":
+    async def __aenter__(self) -> AmadeusClient:
         return self
 
     async def __aexit__(self, *exc_info) -> None:
@@ -97,25 +97,28 @@ class AmadeusClient:
         return self._token
 
     async def _authed_get(self, path: str, params: dict[str, Any]) -> dict:
-        async for attempt in AsyncRetrying(
-            stop=stop_after_attempt(3),
-            wait=wait_exponential(multiplier=0.5, max=4.0),
-            retry=retry_if_exception_type((httpx.TransportError, httpx.HTTPStatusError)),
-            reraise=True,
-        ):
-            with attempt:
-                token = await self._ensure_token()
-                resp = await self._client.get(
-                    path,
-                    params=params,
-                    headers={"Authorization": f"Bearer {token}"},
-                )
-                # 401 → token rotated/revoked, force refresh on next attempt
-                if resp.status_code == 401:
-                    self._token = None
-                    self._token_expires_at = 0.0
-                resp.raise_for_status()
-                return resp.json()
+        try:
+            async for attempt in AsyncRetrying(
+                stop=stop_after_attempt(3),
+                wait=wait_exponential(multiplier=0.5, max=4.0),
+                retry=retry_if_exception_type((httpx.TransportError, httpx.HTTPStatusError)),
+                reraise=True,
+            ):
+                with attempt:
+                    token = await self._ensure_token()
+                    resp = await self._client.get(
+                        path,
+                        params=params,
+                        headers={"Authorization": f"Bearer {token}"},
+                    )
+                    # 401 → token rotated/revoked, force refresh on next attempt
+                    if resp.status_code == 401:
+                        self._token = None
+                        self._token_expires_at = 0.0
+                    resp.raise_for_status()
+                    return resp.json()
+        except (httpx.TransportError, httpx.HTTPStatusError) as e:
+            raise AmadeusError(f"Amadeus request failed: {e}") from e
         raise AmadeusError("unreachable")  # pragma: no cover
 
     # --- Search ---------------------------------------------------------------
@@ -181,11 +184,14 @@ def _parse_iso8601_duration(s: str) -> timedelta:
         if ch.isdigit():
             num += ch
         elif ch == "H":
-            hours = int(num); num = ""
+            hours = int(num)
+            num = ""
         elif ch == "M":
-            minutes = int(num); num = ""
+            minutes = int(num)
+            num = ""
         elif ch == "S":
-            seconds = int(num); num = ""
+            seconds = int(num)
+            num = ""
     return timedelta(days=days, hours=hours, minutes=minutes, seconds=seconds)
 
 
