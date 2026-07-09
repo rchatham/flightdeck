@@ -24,6 +24,14 @@ class WatchCreate(BaseModel):
         return v.upper()
 
 
+class WatchUpdate(BaseModel):
+    departure_date: date | None = None
+    return_date: date | None = None
+    cabin_class: CabinClass | None = None
+    target_price_usd: Decimal | None = Field(default=None, ge=0)
+    active: bool | None = None
+
+
 class WatchOut(BaseModel):
     id: UUID
     origin: str

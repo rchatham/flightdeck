@@ -158,6 +158,21 @@
     </div>
     <div class="card" id="search-results-card" hidden>
       <h2 id="search-results-title">Results</h2>
+      <div class="row" id="search-controls" style="margin-bottom:10px">
+        <label>Sort
+          <select id="search-sort">
+            <option value="price">price</option>
+            <option value="duration">duration</option>
+            <option value="stops">stops</option>
+          </select>
+        </label>
+        <label>Airline
+          <select id="search-airline-filter"><option value="">all</option></select>
+        </label>
+        <label style="flex-direction:row;align-items:center;gap:6px;padding-bottom:8px">
+          <input type="checkbox" id="search-nonstop-only" style="width:auto"> nonstop only
+        </label>
+      </div>
       <div id="search-results"></div>
     </div>
   </section>
@@ -332,10 +347,13 @@ function bookingModal(payload) {
 }
 
 /* ---------- watches ---------- */
+let currentWatches = [];
+
 async function loadWatches() {
   const el = $("#watch-list");
   try {
     const data = await api("/api/v1/watches");
+    currentWatches = data.watches;
     if (!data.count) {
       el.innerHTML = '<div class="empty">No watches yet — add one above.</div>';
       return;
@@ -353,11 +371,51 @@ async function loadWatches() {
         <td class="muted">${when(w.last_checked_at)}</td>
         <td style="white-space:nowrap">
           <button class="small" onclick="checkWatch('${w.id}', this)">Check now</button>
+          <button class="small" onclick="editWatchModal('${w.id}')">Edit</button>
           <button class="small" onclick="bookWatch('${w.id}')">Book</button>
           <button class="small danger" onclick="deleteWatch('${w.id}')">✕</button>
         </td></tr>`).join("") + "</tbody></table>";
   } catch (e) { el.innerHTML = `<div class="empty">Failed to load: ${esc(e.message)}</div>`; }
 }
+
+window.editWatchModal = id => {
+  const w = currentWatches.find(x => x.id === id);
+  if (!w) return;
+  openModal(`<h3>Edit watch</h3>
+    <div class="muted" style="margin-bottom:8px">${esc(w.origin)} → ${esc(w.destination)}, departs ${esc(w.departure_date)}</div>
+    <form class="row" id="watch-edit-form">
+      <label>Return (opt) <input name="return_date" type="date" value="${esc(w.return_date || "")}"></label>
+      <label>Target $ (opt) <input name="target_price_usd" type="number" min="0" step="1"
+             value="${w.target_price_usd ?? ""}"></label>
+      <label>Cabin
+        <select name="cabin_class">
+          ${["economy", "premium_economy", "business", "first"].map(c =>
+            `<option value="${c}" ${c === w.cabin_class ? "selected" : ""}>${c.replace("_", " ")}</option>`
+          ).join("")}
+        </select>
+      </label>
+      <label style="flex-direction:row;align-items:center;gap:6px;padding-bottom:8px">
+        <input type="checkbox" name="active" ${w.active ? "checked" : ""} style="width:auto"> active
+      </label>
+      <button class="primary">Save</button>
+    </form>`);
+  $("#watch-edit-form").addEventListener("submit", async e => {
+    e.preventDefault();
+    const f = new FormData(e.target);
+    const body = {
+      cabin_class: f.get("cabin_class"),
+      active: f.get("active") === "on",
+      return_date: f.get("return_date") || null,
+      target_price_usd: f.get("target_price_usd") ? Number(f.get("target_price_usd")) : null,
+    };
+    try {
+      await api(`/api/v1/watches/${id}`, {method: "PATCH", body: JSON.stringify(body)});
+      toast("Watch updated");
+      $("#modal-backdrop").classList.remove("open");
+      loadWatches();
+    } catch (err) { toast(err.message, true); }
+  });
+};
 
 $("#watch-form").addEventListener("submit", async e => {
   e.preventDefault();
@@ -447,9 +505,62 @@ function segSummary(segs) {
   return segs.map(s => `${esc(s.origin)}→${esc(s.destination)} ${esc(s.carrier)}${esc(s.flight_no)}`).join(" · ");
 }
 
+// ISO-8601 duration as returned for OfferOut.total_duration, e.g. "PT14H30M".
+function durationMinutes(iso) {
+  if (!iso) return Infinity;
+  const m = /^PT(?:(\d+)H)?(?:(\d+)M)?/.exec(iso);
+  if (!m) return Infinity;
+  return (Number(m[1]) || 0) * 60 + (Number(m[2]) || 0);
+}
+function fmtDuration(iso) {
+  const mins = durationMinutes(iso);
+  if (!isFinite(mins)) return "—";
+  return `${Math.floor(mins / 60)}h ${mins % 60}m`;
+}
+
 // Set right before rendering results; "+ Watch" reuses these exact search
 // params so the watch matches what was actually searched (route, dates, cabin).
 let lastSearchParams = null;
+let lastOffers = [];
+
+function renderOffers() {
+  const out = $("#search-results");
+  const sortBy = $("#search-sort").value;
+  const airline = $("#search-airline-filter").value;
+  const nonstopOnly = $("#search-nonstop-only").checked;
+
+  let offers = lastOffers.filter(o =>
+    (!nonstopOnly || o.stops === 0) &&
+    (!airline || o.segments.some(s => s.carrier === airline))
+  );
+  const sorters = {
+    price: (a, b) => Number(a.price_usd) - Number(b.price_usd),
+    duration: (a, b) => durationMinutes(a.total_duration) - durationMinutes(b.total_duration),
+    stops: (a, b) => a.stops - b.stops,
+  };
+  offers = offers.slice().sort(sorters[sortBy]);
+
+  if (!offers.length) {
+    out.innerHTML = '<div class="empty">No offers match the current filters.</div>';
+    return;
+  }
+  out.innerHTML = `<table><thead><tr>
+      <th class="num">Price</th><th>Duration</th><th>Stops</th><th>Itinerary</th><th>Source</th><th></th>
+    </tr></thead><tbody>` + offers.map(o => `<tr>
+      <td class="num"><strong>${usd(o.price_usd)}</strong></td>
+      <td class="mono">${fmtDuration(o.total_duration)}</td>
+      <td>${o.stops === 0 ? "nonstop" : o.stops + " stop" + (o.stops > 1 ? "s" : "")}</td>
+      <td class="muted" style="font-size:13px">${segSummary(o.segments)}</td>
+      <td><span class="badge gray">${esc(o.source)}</span></td>
+      <td style="white-space:nowrap">
+        <button class="small" onclick="bookOffer('${o.id}')">Book</button>
+        <button class="small" onclick="watchOffer('${o.price_usd}')">+ Watch</button>
+      </td>
+    </tr>`).join("") + "</tbody></table>";
+}
+["search-sort", "search-airline-filter", "search-nonstop-only"].forEach(id =>
+  $("#" + id).addEventListener("change", renderOffers)
+);
 
 $("#search-form").addEventListener("submit", async e => {
   e.preventDefault();
@@ -469,6 +580,7 @@ $("#search-form").addEventListener("submit", async e => {
     $("#search-results-title").textContent =
       `${data.origin} → ${data.destination} · ${data.offer_count} offers`;
     if (!data.offer_count) {
+      lastOffers = [];
       out.innerHTML = '<div class="empty">No offers found. If no fare-source API keys are configured '
         + 'in .env (Amadeus / Kiwi / SerpAPI), every search returns empty — check <code>flightdeck health</code>.</div>';
       return;
@@ -477,18 +589,13 @@ $("#search-form").addEventListener("submit", async e => {
       origin: body.origin, destination: body.destination, departure_date: body.departure_date,
       return_date: body.return_date || null, cabin_class: body.cabin_class,
     };
-    out.innerHTML = `<table><thead><tr>
-        <th class="num">Price</th><th>Stops</th><th>Itinerary</th><th>Source</th><th></th>
-      </tr></thead><tbody>` + data.offers.map(o => `<tr>
-        <td class="num"><strong>${usd(o.price_usd)}</strong></td>
-        <td>${o.stops === 0 ? "nonstop" : o.stops + " stop" + (o.stops > 1 ? "s" : "")}</td>
-        <td class="muted" style="font-size:13px">${segSummary(o.segments)}</td>
-        <td><span class="badge gray">${esc(o.source)}</span></td>
-        <td style="white-space:nowrap">
-          <button class="small" onclick="bookOffer('${o.id}')">Book</button>
-          <button class="small" onclick="watchOffer('${o.price_usd}')">+ Watch</button>
-        </td>
-      </tr>`).join("") + "</tbody></table>";
+    lastOffers = data.offers;
+    const airlines = [...new Set(data.offers.flatMap(o => o.segments.map(s => s.carrier)))].sort();
+    $("#search-airline-filter").innerHTML = '<option value="">all</option>'
+      + airlines.map(a => `<option value="${esc(a)}">${esc(a)}</option>`).join("");
+    $("#search-sort").value = "price";
+    $("#search-nonstop-only").checked = false;
+    renderOffers();
   } catch (err) {
     out.innerHTML = `<div class="empty">Search failed: ${esc(err.message)}</div>`;
   } finally { btn.disabled = false; btn.textContent = "Search"; }
@@ -833,6 +940,11 @@ async function loadSettings() {
                 s.notifications.ntfy ? "configured" : "set FLIGHTDECK_NTFY_TOPIC in .env"),
       statusRow("Alert webhook", s.notifications.webhook,
                 s.notifications.webhook ? "configured" : "set FLIGHTDECK_ALERT_WEBHOOK_URL in .env"),
+      statusRow("Watch checks", !s.watches.stale,
+                s.watches.stalest_check_age_hours == null
+                  ? `${s.watches.active_count} active, none checked yet`
+                  : `${s.watches.active_count} active, oldest checked ${s.watches.stalest_check_age_hours.toFixed(1)}h ago`
+                  + (s.watches.stale ? " — beat may have missed a cycle" : "")),
     ].join("");
     el.innerHTML = `<table><thead><tr><th>Component</th><th>Status</th><th>Detail</th></tr></thead>
       <tbody>${rows}</tbody></table>

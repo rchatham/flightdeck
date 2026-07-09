@@ -15,6 +15,7 @@ from app.api.schemas.watches import (
     WatchCreate,
     WatchListResponse,
     WatchOut,
+    WatchUpdate,
 )
 from app.db import get_session
 from app.models import PriceAlert, PriceWatch
@@ -93,6 +94,26 @@ async def get_watch(
     watch = await session.get(PriceWatch, watch_id)
     if watch is None:
         raise HTTPException(status_code=404, detail="watch not found")
+    return WatchOut.model_validate(watch)
+
+
+@router.patch("/{watch_id}", response_model=WatchOut)
+async def update_watch(
+    watch_id: UUID, body: WatchUpdate, session: AsyncSession = Depends(get_session)
+) -> WatchOut:
+    """Edit a watch in place — target price, dates, cabin, or active state.
+
+    Origin/destination are immutable; that's a different trip, not an edit.
+    Keeps alert/price history tied to the same watch id instead of losing it
+    to a delete-and-recreate.
+    """
+    watch = await session.get(PriceWatch, watch_id)
+    if watch is None:
+        raise HTTPException(status_code=404, detail="watch not found")
+    for field, value in body.model_dump(exclude_unset=True).items():
+        setattr(watch, field, value)
+    await session.commit()
+    await session.refresh(watch)
     return WatchOut.model_validate(watch)
 
 

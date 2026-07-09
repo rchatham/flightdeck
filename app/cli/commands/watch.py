@@ -7,7 +7,7 @@ import click
 from rich.panel import Panel
 from rich.table import Table
 
-from app.cli.client import APIClient, safe_json
+from app.cli.client import APIClient, fail, safe_json
 from app.cli.output import console, emit
 
 
@@ -161,6 +161,38 @@ def watch_rm_cmd(ctx, watch_id):
         console.print(f"[green]Deleted watch {watch_id}.[/green]")
     else:
         emit(safe_json(resp), as_json=True, render_human=None)
+
+
+@watch_cmd.command("edit", help="Edit a watch in place — target, dates, cabin, or active state.")
+@click.argument("watch_id")
+@click.option("--departure-date", type=click.DateTime(formats=["%Y-%m-%d"]), default=None)
+@click.option("--return-date", type=click.DateTime(formats=["%Y-%m-%d"]), default=None)
+@click.option("--target", type=float, default=None, help="New alert-at-or-below price (USD).")
+@click.option("--cabin", default=None,
+              type=click.Choice(["economy", "premium_economy", "business", "first"]))
+@click.option("--active/--inactive", "active", default=None)
+@click.option("--json", "as_json", is_flag=True)
+@click.pass_context
+def watch_edit_cmd(ctx, watch_id, departure_date, return_date, target, cabin, active, as_json):
+    body: dict[str, Any] = {}
+    if departure_date is not None:
+        body["departure_date"] = departure_date.date().isoformat()
+    if return_date is not None:
+        body["return_date"] = return_date.date().isoformat()
+    if target is not None:
+        body["target_price_usd"] = target
+    if cabin is not None:
+        body["cabin_class"] = cabin
+    if active is not None:
+        body["active"] = active
+    if not body:
+        fail("nothing to update — pass at least one of --return-date/--target/--cabin/--active")
+    client = _client(ctx)
+    try:
+        resp = client.patch(f"/api/v1/watches/{watch_id}", json=body)
+    finally:
+        client.close()
+    emit(safe_json(resp), as_json=as_json, render_human=_render_watch)
 
 
 @watch_cmd.command("check", help="Run a live price check on a watch right now.")
