@@ -33,3 +33,13 @@ def test_dashboard_not_in_openapi_schema():
     resp = _get("/openapi.json")
     assert resp.status_code == 200
     assert "/" not in resp.json()["paths"]
+
+
+def test_system_status_reports_watch_staleness():
+    resp = _get("/api/v1/system/status")
+    assert resp.status_code == 200
+    body = resp.json()
+    assert "watches" in body
+    assert "active_count" in body["watches"]
+    assert "stalest_check_age_hours" in body["watches"]
+    assert "stale" in body["watches"]

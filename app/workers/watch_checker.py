@@ -49,7 +49,13 @@ async def _check_all_async() -> list[dict]:
     return results
 
 
-@celery_app.task(name="app.workers.watch_checker.check_all_watches")
+@celery_app.task(
+    name="app.workers.watch_checker.check_all_watches",
+    autoretry_for=(Exception,),
+    retry_backoff=True,
+    retry_kwargs={"max_retries": 3},
+    acks_late=True,
+)
 def check_all_watches() -> dict:
     """Check every active watch. Sync wrapper for Celery."""
     runs = asyncio.run(_check_all_async())
@@ -79,7 +85,13 @@ async def _check_one_async(watch_id: str) -> dict:
         }
 
 
-@celery_app.task(name="app.workers.watch_checker.check_watch_by_id")
+@celery_app.task(
+    name="app.workers.watch_checker.check_watch_by_id",
+    autoretry_for=(Exception,),
+    retry_backoff=True,
+    retry_kwargs={"max_retries": 3},
+    acks_late=True,
+)
 def check_watch_by_id(watch_id: str) -> dict:
     """Check a single watch by id. Sync wrapper for Celery."""
     return asyncio.run(_check_one_async(watch_id))
