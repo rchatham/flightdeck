@@ -29,6 +29,58 @@ services:
       timeout: 5s
       retries: 5
 
+  api:
+    build: .
+    container_name: flightdeck-api
+    ports:
+      - "8002:8002"
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      FLIGHTDECK_DATABASE_URL: postgresql+asyncpg://flightdeck:flightdeck@postgres:5432/flightdeck
+      FLIGHTDECK_REDIS_URL: redis://redis:6379/0
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+
+  worker:
+    build: .
+    container_name: flightdeck-worker
+    command: ["uv", "run", "celery", "-A", "app.workers.celery_app", "worker", "--loglevel=info"]
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      FLIGHTDECK_DATABASE_URL: postgresql+asyncpg://flightdeck:flightdeck@postgres:5432/flightdeck
+      FLIGHTDECK_REDIS_URL: redis://redis:6379/0
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+
+  beat:
+    build: .
+    container_name: flightdeck-beat
+    command: ["uv", "run", "celery", "-A", "app.workers.celery_app", "beat", "--loglevel=info"]
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      FLIGHTDECK_DATABASE_URL: postgresql+asyncpg://flightdeck:flightdeck@postgres:5432/flightdeck
+      FLIGHTDECK_REDIS_URL: redis://redis:6379/0
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+
 volumes:
   flightdeck_pg_data:
   flightdeck_redis_data:

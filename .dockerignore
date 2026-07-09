@@ -1,0 +1,15 @@
+.venv/
+__pycache__/
+*.pyc
+.git/
+tests/
+.env
+.env.local
+.pytest_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+*.egg-info/
+data/
+claude-progress.txt
+.claude/

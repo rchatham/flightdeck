@@ -17,6 +17,34 @@ make health       # in another terminal — verify all components
 
 See `Makefile` for full command list.
 
+## Running in Docker
+
+`make up` only starts **postgres + redis** in Docker — the API, worker, and
+beat scheduler are expected to run on the host via `make dev` (see
+Quickstart above). This is the normal local-dev workflow.
+
+To run the **entire stack** (api + worker + beat + postgres + redis) in
+Docker instead — no local `uv`/Python needed:
+
+```bash
+make docker-up-full     # builds the image and starts everything
+make docker-down-full   # stops the full stack
+```
+
+`docker-up-full` builds the app image from the repo `Dockerfile` and
+reuses it for the `api`, `worker`, and `beat` services. Inside the compose
+network, the app services reach Postgres/Redis at `postgres:5432` and
+`redis:6379` — not `localhost:5434`/`localhost:6382`, which only apply from
+the host machine (used by `make dev` and other local tooling). Host-side
+port mappings (5434, 6382, 8002) are unchanged either way.
+
+To rebuild the image only (e.g. after a dependency change) without
+restarting containers:
+
+```bash
+make docker-build
+```
+
 ## Web dashboard
 
 `make dev`, then open <http://localhost:8002/> — a single-page dashboard
