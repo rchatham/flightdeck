@@ -1,4 +1,4 @@
-.PHONY: help setup up down dev test lint health seed migrate clean docker-build docker-up-full docker-down-full
+.PHONY: help setup up down dev test lint health seed migrate clean docker-build docker-up-full docker-down-full backup restore
 
 help:
 	@echo "FlightDeck - common commands"
@@ -14,6 +14,8 @@ help:
 	@echo "  make docker-build    - build the api/worker/beat image"
 	@echo "  make docker-up-full  - run the full stack in Docker (api + worker + beat + postgres + redis)"
 	@echo "  make docker-down-full - stop the full Docker stack"
+	@echo "  make backup          - dump the postgres DB to backups/"
+	@echo "  make restore FILE=.. - restore the postgres DB from a dump file"
 
 setup:
 	uv sync
@@ -57,3 +59,13 @@ docker-up-full:
 
 docker-down-full:
 	docker compose down
+
+backup:
+	mkdir -p backups
+	docker compose exec -T postgres pg_dump -U flightdeck -Fc flightdeck > backups/flightdeck_$(shell date +%Y%m%d_%H%M%S).dump
+
+restore:
+ifndef FILE
+	$(error FILE is not set. Usage: make restore FILE=backups/flightdeck_YYYYMMDD_HHMMSS.dump)
+endif
+	docker compose exec -T postgres pg_restore -U flightdeck -d flightdeck --clean --if-exists < $(FILE)
