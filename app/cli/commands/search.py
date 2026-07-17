@@ -44,8 +44,12 @@ def _render_results(payload: dict) -> None:
         f"[dim]on {payload['departure_date']} · search_id={payload['search_id']}[/dim]"
     )
 
+    has_legs = any(o.get("leg") for o in offers)
+
     t = Table(show_header=True, header_style="bold")
     t.add_column("#", justify="right", style="dim")
+    if has_legs:
+        t.add_column("Leg")
     t.add_column("Price (USD)", justify="right")
     t.add_column("Stops", justify="right")
     t.add_column("Duration", justify="right")
@@ -62,15 +66,20 @@ def _render_results(payload: dict) -> None:
             duration_secs = _iso_to_seconds(td)
         else:
             duration_secs = td if td is None else float(td)
-        t.add_row(
-            str(i),
+        row = [str(i)]
+        if has_legs:
+            row.append(o.get("leg") or "—")
+        row += [
             f"${float(o['price_usd']):,.2f}",
             str(o["stops"]),
             _humanize_duration(duration_secs),
             _humanize_segments(o.get("segments", [])),
             o.get("source", "?"),
             str(o["id"])[:8],
-        )
+        ]
+        t.add_row(*row)
+    if has_legs:
+        console.print("[dim]Open-jaw: outbound/return priced as separate one-way fares.[/dim]")
     console.print(t)
     console.print(f"[dim]{len(offers)} offers · sorted by price[/dim]")
 
@@ -92,12 +101,16 @@ def _iso_to_seconds(s: str) -> float | None:
         if ch.isdigit():
             num += ch
         elif ch == "H":
-            hours = int(num); num = ""
+            hours = int(num)
+            num = ""
         elif ch == "M":
-            minutes = int(num); num = ""
+            minutes = int(num)
+            num = ""
         elif ch == "S":
-            seconds = int(num); num = ""
-    return float(timedelta(days=days, hours=hours, minutes=minutes, seconds=seconds).total_seconds())
+            seconds = int(num)
+            num = ""
+    total = timedelta(days=days, hours=hours, minutes=minutes, seconds=seconds)
+    return float(total.total_seconds())
 
 
 @click.command("search", help="Search for flights between two airports.")
@@ -106,6 +119,10 @@ def _iso_to_seconds(s: str) -> float | None:
 @click.argument("departure_date", type=click.DateTime(formats=["%Y-%m-%d"]))
 @click.option("--return-date", type=click.DateTime(formats=["%Y-%m-%d"]), default=None,
               help="Round-trip return date (YYYY-MM-DD).")
+@click.option("--return-origin", default=None,
+              help="Open-jaw: return leg departs here instead of DESTINATION.")
+@click.option("--return-destination", default=None,
+              help="Open-jaw: return leg arrives here instead of ORIGIN.")
 @click.option("--flex", "flex_days", type=int, default=0, help="±N days flexibility.")
 @click.option("--passengers", type=int, default=1)
 @click.option("--cabin", "cabin_class", type=click.Choice(
@@ -120,6 +137,8 @@ def search_cmd(
     destination: str,
     departure_date: Any,
     return_date: Any | None,
+    return_origin: str | None,
+    return_destination: str | None,
     flex_days: int,
     passengers: int,
     cabin_class: str,
@@ -127,10 +146,14 @@ def search_cmd(
     no_nearby: bool,
     as_json: bool,
 ) -> None:
+    departure_date_str = (
+        departure_date.date().isoformat() if hasattr(departure_date, "date")
+        else str(departure_date)
+    )
     body = {
         "origin": origin.upper(),
         "destination": destination.upper(),
-        "departure_date": departure_date.date().isoformat() if hasattr(departure_date, "date") else str(departure_date),
+        "departure_date": departure_date_str,
         "flex_days": flex_days,
         "passengers": passengers,
         "cabin_class": cabin_class,
@@ -142,6 +165,10 @@ def search_cmd(
         )
     if max_stops is not None:
         body["max_stops"] = max_stops
+    if return_origin:
+        body["return_origin"] = return_origin.upper()
+    if return_destination:
+        body["return_destination"] = return_destination.upper()
 
     api_url = ctx.obj.get("api_url") if ctx.obj else None
     client = APIClient(base_url=api_url, timeout=60.0)

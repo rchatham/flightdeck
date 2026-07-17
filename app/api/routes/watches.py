@@ -34,6 +34,8 @@ async def create_watch(
         destination=body.destination,
         departure_date=body.departure_date,
         return_date=body.return_date,
+        return_origin=body.return_origin,
+        return_destination=body.return_destination,
         cabin_class=body.cabin_class,
         target_price_usd=body.target_price_usd,
     )

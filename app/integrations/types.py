@@ -45,6 +45,7 @@ class NormalizedOffer:
     deep_link: str | None = None
     expires_at: datetime | None = None
     raw: dict | None = None      # original source payload (kept for debugging)
+    leg: str | None = None       # 'outbound' or 'return' — open-jaw searches only
 
     @property
     def dedup_key(self) -> str:

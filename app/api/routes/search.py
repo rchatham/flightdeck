@@ -44,6 +44,7 @@ def _offer_to_out(o: FlightOffer) -> OfferOut:
         fare_type=o.fare_type or "regular",
         booking_url=o.booking_url,
         deep_link=o.deep_link,
+        leg=o.leg,
     )
 
 

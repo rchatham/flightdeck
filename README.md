@@ -45,13 +45,25 @@ restarting containers:
 make docker-build
 ```
 
+The Postgres data lives in the `flightdeck_pg_data` Docker volume. Back it
+up (via `pg_dump`, through the running `postgres` container) with
+`make backup`, which writes a timestamped custom-format dump to `backups/`
+(created if needed, and gitignored). Restore a dump with
+`make restore FILE=backups/flightdeck_<timestamp>.dump`, which runs
+`pg_restore --clean --if-exists` to drop and recreate existing objects
+before reloading. This is solo/personal-scale tooling — a manual snapshot,
+not continuous backup (no WAL archiving or offsite/S3 copies), so remember
+to run `make backup` yourself before risky changes and copy dumps offsite
+periodically.
+
 ## Web dashboard
 
 `make dev`, then open <http://localhost:8002/> — a single-page dashboard
 (served by the API itself, no separate frontend) covering watches, alerts,
 search + booking links, deal scans, hacker fares, points/rewards, timing
-analysis (with a price-history chart), and system status. The JSON API is
-documented at <http://localhost:8002/docs>.
+analysis (with a price-history chart), and system status. Mobile-friendly
+(check a price alert from your phone). The JSON API is documented at
+<http://localhost:8002/docs>.
 
 ## Price watches
 
@@ -60,12 +72,27 @@ Track a specific trip and get alerted when the price is right:
 ```bash
 flightdeck watch add SFO NRT 2026-10-15 --target 800   # alert at/below $800
 flightdeck watch list
+flightdeck watch edit <WATCH_ID> --target 750           # edit in place, keeps alert history
 flightdeck watch check <WATCH_ID>                       # live check now
 flightdeck watch alerts                                 # unacknowledged alerts
 ```
 
-The Celery beat schedule checks all active watches every 6 hours. Alert
-policy lives in `app/services/alert_rules.py` (Hook 4).
+The Celery beat schedule checks all active watches every 6 hours (with
+retry/backoff on transient failures); `GET /api/v1/system/status` reports if
+a cycle was missed. Alert policy lives in `app/services/alert_rules.py`
+(Hook 4).
+
+**Open-jaw** (returning from/to a different airport than you departed
+from/to) is supported on both `search` and `watch add` via
+`--return-origin`/`--return-destination`. None of Amadeus/Kiwi/SerpAPI's
+wired-up endpoints price an open-jaw itinerary in one call, so it's run as
+two separately-priced one-way fares (tagged `outbound`/`return`) rather than
+a single combined fare — book both legs separately:
+
+```bash
+flightdeck search SFO NRT 2026-10-15 --return-date 2026-10-25 \
+  --return-origin HND --return-destination LAX
+```
 
 Fired alerts can push to your phone via [ntfy.sh](https://ntfy.sh) and/or a
 generic JSON webhook — set `FLIGHTDECK_NTFY_TOPIC` or

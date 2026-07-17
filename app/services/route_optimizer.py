@@ -19,7 +19,7 @@ import hashlib
 import json
 import logging
 from collections.abc import Sequence
-from dataclasses import asdict
+from dataclasses import asdict, replace
 from datetime import datetime, timedelta
 from decimal import Decimal
 
@@ -124,6 +124,8 @@ def _offers_cache_key(req: SearchRequest) -> str:
         "destination": req.destination,
         "departure_date": req.departure_date.isoformat(),
         "return_date": req.return_date.isoformat() if req.return_date else None,
+        "return_origin": req.return_origin,
+        "return_destination": req.return_destination,
         "passengers": req.passengers,
         "cabin_class": req.cabin_class,
         "max_stops": req.max_stops,
@@ -171,7 +173,43 @@ def _offer_from_jsonable(d: dict) -> NormalizedOffer:
         deep_link=d["deep_link"],
         expires_at=datetime.fromisoformat(d["expires_at"]) if d["expires_at"] else None,
         raw=d["raw"],
+        leg=d.get("leg"),
     )
+
+
+async def _fan_out_one_call(req: SearchRequest) -> list[NormalizedOffer]:
+    """Run all configured sources in parallel for a single provider call each."""
+    results = await asyncio.gather(
+        _search_amadeus(req),
+        _search_kiwi(req),
+        _search_serpapi(req),
+        return_exceptions=False,  # already swallowed inside each helper
+    )
+    flat: list[NormalizedOffer] = []
+    for source_offers in results:
+        flat.extend(source_offers)
+    return flat
+
+
+def _open_jaw_leg_requests(req: SearchRequest) -> tuple[SearchRequest, SearchRequest]:
+    """Split an open-jaw request into two one-way legs.
+
+    None of Amadeus/Kiwi/SerpAPI's wired-up search endpoints accept an
+    independent return-leg origin/destination in a single round-trip call —
+    each only supports a symmetric there-and-back. So an open-jaw request
+    (return_origin/return_destination set to something other than the
+    outbound destination/origin) is priced as two separate one-way fares,
+    tagged via NormalizedOffer.leg so callers can tell them apart.
+    """
+    no_return = {"return_date": None, "return_origin": None, "return_destination": None}
+    outbound_req = req.model_copy(update=no_return)
+    return_req = req.model_copy(update={
+        "origin": req.return_origin or req.destination,
+        "destination": req.return_destination or req.origin,
+        "departure_date": req.return_date,
+        **no_return,
+    })
+    return outbound_req, return_req
 
 
 async def _fan_out_sources(req: SearchRequest) -> list[NormalizedOffer]:
@@ -183,15 +221,17 @@ async def _fan_out_sources(req: SearchRequest) -> list[NormalizedOffer]:
     """
 
     async def _live_fetch() -> list[dict]:
-        results = await asyncio.gather(
-            _search_amadeus(req),
-            _search_kiwi(req),
-            _search_serpapi(req),
-            return_exceptions=False,  # already swallowed inside each helper
-        )
-        flat: list[NormalizedOffer] = []
-        for source_offers in results:
-            flat.extend(source_offers)
+        if req.is_open_jaw:
+            outbound_req, return_req = _open_jaw_leg_requests(req)
+            outbound_offers, return_offers = await asyncio.gather(
+                _fan_out_one_call(outbound_req), _fan_out_one_call(return_req)
+            )
+            flat = (
+                [replace(o, leg="outbound") for o in outbound_offers]
+                + [replace(o, leg="return") for o in return_offers]
+            )
+        else:
+            flat = await _fan_out_one_call(req)
         return [_offer_to_jsonable(o) for o in flat]
 
     cached = await get_or_set(_offers_cache_key(req), _OFFERS_CACHE_TTL_SECONDS, _live_fetch)
@@ -256,6 +296,7 @@ def _to_db_offer(search_id, n: NormalizedOffer) -> FlightOffer:
         booking_url=n.booking_url,
         deep_link=n.deep_link,
         expires_at=n.expires_at,
+        leg=n.leg,
     )
 
 
@@ -275,6 +316,8 @@ async def run_search(
         destination=req.destination,
         departure_date=req.departure_date,
         return_date=req.return_date,
+        return_origin=req.return_origin,
+        return_destination=req.return_destination,
         flex_days=req.flex_days,
         passengers=req.passengers,
         cabin_class=req.cabin_class,

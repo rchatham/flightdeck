@@ -30,11 +30,15 @@ def _fmt_price(value: Any) -> str:
 
 def _render_watch(payload: dict) -> None:
     target = _fmt_price(payload.get("target_price_usd"))
+    return_leg = ""
+    if payload.get("return_date"):
+        return_origin = payload.get("return_origin") or payload["destination"]
+        return_destination = payload.get("return_destination") or payload["origin"]
+        return_leg = f" ⇄ {return_origin}→{return_destination} {payload['return_date']}"
     body = (
         f"[bold]{payload['origin']} → {payload['destination']}[/bold]  "
-        f"{payload['departure_date']}"
-        + (f" ⇄ {payload['return_date']}" if payload.get("return_date") else "")
-        + f"  [dim]{payload['cabin_class']}[/dim]\n"
+        f"{payload['departure_date']}{return_leg}"
+        f"  [dim]{payload['cabin_class']}[/dim]\n"
         f"target {target} · last seen {_fmt_price(payload.get('last_price_usd'))} · "
         f"lowest {_fmt_price(payload.get('lowest_seen_usd'))}"
     )
@@ -110,12 +114,17 @@ def _client(ctx: click.Context) -> APIClient:
 @click.argument("destination")
 @click.argument("departure_date", type=click.DateTime(formats=["%Y-%m-%d"]))
 @click.option("--return-date", type=click.DateTime(formats=["%Y-%m-%d"]), default=None)
+@click.option("--return-origin", default=None,
+              help="Open-jaw: return leg departs here instead of DESTINATION.")
+@click.option("--return-destination", default=None,
+              help="Open-jaw: return leg arrives here instead of ORIGIN.")
 @click.option("--target", type=float, default=None, help="Alert at/below this price (USD).")
 @click.option("--cabin", default="economy",
               type=click.Choice(["economy", "premium_economy", "business", "first"]))
 @click.option("--json", "as_json", is_flag=True)
 @click.pass_context
-def watch_add_cmd(ctx, origin, destination, departure_date, return_date, target, cabin, as_json):
+def watch_add_cmd(ctx, origin, destination, departure_date, return_date,
+                   return_origin, return_destination, target, cabin, as_json):
     body = {
         "origin": origin.upper(),
         "destination": destination.upper(),
@@ -124,6 +133,10 @@ def watch_add_cmd(ctx, origin, destination, departure_date, return_date, target,
     }
     if return_date is not None:
         body["return_date"] = return_date.date().isoformat()
+    if return_origin:
+        body["return_origin"] = return_origin.upper()
+    if return_destination:
+        body["return_destination"] = return_destination.upper()
     if target is not None:
         body["target_price_usd"] = target
     client = _client(ctx)
@@ -167,18 +180,27 @@ def watch_rm_cmd(ctx, watch_id):
 @click.argument("watch_id")
 @click.option("--departure-date", type=click.DateTime(formats=["%Y-%m-%d"]), default=None)
 @click.option("--return-date", type=click.DateTime(formats=["%Y-%m-%d"]), default=None)
+@click.option("--return-origin", default=None,
+              help="Open-jaw: return leg departs here instead of the destination.")
+@click.option("--return-destination", default=None,
+              help="Open-jaw: return leg arrives here instead of the origin.")
 @click.option("--target", type=float, default=None, help="New alert-at-or-below price (USD).")
 @click.option("--cabin", default=None,
               type=click.Choice(["economy", "premium_economy", "business", "first"]))
 @click.option("--active/--inactive", "active", default=None)
 @click.option("--json", "as_json", is_flag=True)
 @click.pass_context
-def watch_edit_cmd(ctx, watch_id, departure_date, return_date, target, cabin, active, as_json):
+def watch_edit_cmd(ctx, watch_id, departure_date, return_date, return_origin,
+                    return_destination, target, cabin, active, as_json):
     body: dict[str, Any] = {}
     if departure_date is not None:
         body["departure_date"] = departure_date.date().isoformat()
     if return_date is not None:
         body["return_date"] = return_date.date().isoformat()
+    if return_origin:
+        body["return_origin"] = return_origin.upper()
+    if return_destination:
+        body["return_destination"] = return_destination.upper()
     if target is not None:
         body["target_price_usd"] = target
     if cabin is not None:
@@ -186,7 +208,8 @@ def watch_edit_cmd(ctx, watch_id, departure_date, return_date, target, cabin, ac
     if active is not None:
         body["active"] = active
     if not body:
-        fail("nothing to update — pass at least one of --return-date/--target/--cabin/--active")
+        fail("nothing to update — pass at least one of "
+             "--return-date/--return-origin/--return-destination/--target/--cabin/--active")
     client = _client(ctx)
     try:
         resp = client.patch(f"/api/v1/watches/{watch_id}", json=body)

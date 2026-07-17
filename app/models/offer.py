@@ -28,6 +28,9 @@ class FlightOffer(Base, UUIDMixin, TimestampMixin):
     stops: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     segments: Mapped[list] = mapped_column(JSONB, nullable=False)
     fare_type: Mapped[str | None] = mapped_column(String, nullable=True)
+    # Set for open-jaw searches only: "outbound" or "return". Null for a
+    # normal (symmetric) round-trip or one-way offer priced in one call.
+    leg: Mapped[str | None] = mapped_column(String, nullable=True)
     booking_url: Mapped[str | None] = mapped_column(String, nullable=True)
     deep_link: Mapped[str | None] = mapped_column(String, nullable=True)
     expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)

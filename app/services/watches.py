@@ -66,6 +66,8 @@ async def check_watch(session: AsyncSession, watch: PriceWatch) -> CheckOutcome:
         destination=watch.destination,
         departure_date=watch.departure_date,
         return_date=watch.return_date,
+        return_origin=watch.return_origin,
+        return_destination=watch.return_destination,
         passengers=1,
         cabin_class=watch.cabin_class,
         include_nearby=False,
@@ -73,26 +75,42 @@ async def check_watch(session: AsyncSession, watch: PriceWatch) -> CheckOutcome:
     offers = await _fan_out_sources(req)
     watch.last_checked_at = now
 
-    if not offers:
-        await session.commit()
-        return CheckOutcome(str(watch.id), 0, None, None)
+    if req.is_open_jaw:
+        # Two separately-priced one-way legs, not one combined fare — see
+        # route_optimizer._open_jaw_leg_requests. Both legs need an offer to
+        # call this trip "priced"; the watch's target/alert price is the sum.
+        outbound = [o for o in offers if o.leg == "outbound"]
+        inbound = [o for o in offers if o.leg == "return"]
+        if not outbound or not inbound:
+            await session.commit()
+            return CheckOutcome(str(watch.id), len(offers), None, None)
+        cheapest_out = min(outbound, key=lambda o: o.price_usd)
+        cheapest_in = min(inbound, key=lambda o: o.price_usd)
+        price = cheapest_out.price_usd + cheapest_in.price_usd
+        price_source = f"{cheapest_out.source}+{cheapest_in.source}"
+    else:
+        if not offers:
+            await session.commit()
+            return CheckOutcome(str(watch.id), 0, None, None)
+        cheapest = min(offers, key=lambda o: o.price_usd)
+        price = cheapest.price_usd
+        price_source = cheapest.source
 
-    cheapest = min(offers, key=lambda o: o.price_usd)
-    price = cheapest.price_usd
-
-    # Every watch check doubles as a price-history observation, feeding the
-    # Hook 2 timing analyzer.
-    session.add(PriceHistory(
-        route_key=_route_key(watch),
-        price_usd=price,
-        source=cheapest.source,
-        cabin_class=watch.cabin_class,
-        days_until_departure=(watch.departure_date - date.today()).days,
-    ))
+        # Every watch check doubles as a price-history observation, feeding
+        # the Hook 2 timing analyzer. Skipped for open-jaw: a summed
+        # two-leg price isn't comparable to this route_key's other
+        # (symmetric round-trip) history.
+        session.add(PriceHistory(
+            route_key=_route_key(watch),
+            price_usd=price,
+            source=price_source,
+            cabin_class=watch.cabin_class,
+            days_until_departure=(watch.departure_date - date.today()).days,
+        ))
 
     # Evaluate the alert rule against pre-update state, then roll state forward.
     decision: AlertDecision = evaluate_watch(
-        PriceObservation(price_usd=price, source=cheapest.source, observed_at=now),
+        PriceObservation(price_usd=price, source=price_source, observed_at=now),
         _snapshot(watch),
     )
 

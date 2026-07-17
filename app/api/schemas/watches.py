@@ -15,21 +15,36 @@ class WatchCreate(BaseModel):
     destination: str = Field(min_length=3, max_length=3, description="Destination IATA code")
     departure_date: date
     return_date: date | None = None
+    return_origin: str | None = Field(
+        default=None, min_length=3, max_length=3,
+        description="Open-jaw: return leg departs here instead of `destination`",
+    )
+    return_destination: str | None = Field(
+        default=None, min_length=3, max_length=3,
+        description="Open-jaw: return leg arrives here instead of `origin`",
+    )
     cabin_class: CabinClass = "economy"
     target_price_usd: Decimal | None = Field(default=None, ge=0)
 
-    @field_validator("origin", "destination")
+    @field_validator("origin", "destination", "return_origin", "return_destination")
     @classmethod
-    def _upper(cls, v: str) -> str:
-        return v.upper()
+    def _upper(cls, v: str | None) -> str | None:
+        return v.upper() if v else v
 
 
 class WatchUpdate(BaseModel):
     departure_date: date | None = None
     return_date: date | None = None
+    return_origin: str | None = Field(default=None, min_length=3, max_length=3)
+    return_destination: str | None = Field(default=None, min_length=3, max_length=3)
     cabin_class: CabinClass | None = None
     target_price_usd: Decimal | None = Field(default=None, ge=0)
     active: bool | None = None
+
+    @field_validator("return_origin", "return_destination")
+    @classmethod
+    def _upper(cls, v: str | None) -> str | None:
+        return v.upper() if v else v
 
 
 class WatchOut(BaseModel):
@@ -38,6 +53,8 @@ class WatchOut(BaseModel):
     destination: str
     departure_date: date
     return_date: date | None
+    return_origin: str | None
+    return_destination: str | None
     cabin_class: str
     target_price_usd: Decimal | None
     active: bool

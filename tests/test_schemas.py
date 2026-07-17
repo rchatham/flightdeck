@@ -61,6 +61,38 @@ def test_search_request_rejects_max_stops_out_of_bounds():
                       max_stops=4)
 
 
+def test_search_request_return_origin_destination_normalized_to_upper():
+    req = SearchRequest(origin="sfo", destination="nrt", departure_date=date(2026, 9, 1),
+                        return_date=date(2026, 9, 10), return_origin="hnd",
+                        return_destination="lax")
+    assert req.return_origin == "HND"
+    assert req.return_destination == "LAX"
+
+
+def test_search_request_is_open_jaw_false_for_plain_round_trip():
+    req = SearchRequest(origin="SFO", destination="NRT", departure_date=date(2026, 9, 1),
+                        return_date=date(2026, 9, 10))
+    assert req.is_open_jaw is False
+
+
+def test_search_request_is_open_jaw_false_without_a_return_date():
+    # Setting return_origin with no return_date isn't a real trip — no return leg to fly.
+    req = SearchRequest(origin="SFO", destination="NRT", departure_date=date(2026, 9, 1),
+                        return_origin="HND")
+    assert req.is_open_jaw is False
+
+
+@pytest.mark.parametrize("kwargs", [
+    {"return_origin": "HND"},
+    {"return_destination": "LAX"},
+    {"return_origin": "HND", "return_destination": "LAX"},
+])
+def test_search_request_is_open_jaw_true_when_return_leg_differs(kwargs):
+    req = SearchRequest(origin="SFO", destination="NRT", departure_date=date(2026, 9, 1),
+                        return_date=date(2026, 9, 10), **kwargs)
+    assert req.is_open_jaw is True
+
+
 # --- WatchCreate -----------------------------------------------------------------
 
 

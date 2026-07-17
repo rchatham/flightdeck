@@ -23,6 +23,10 @@ class PriceWatch(Base, UUIDMixin, TimestampMixin):
     destination: Mapped[str] = mapped_column(String(3), nullable=False)
     departure_date: Mapped[date] = mapped_column(Date, nullable=False)
     return_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    # Open-jaw: return leg departs/arrives different airports than the
+    # outbound. Null means "same as origin/destination" (a normal round trip).
+    return_origin: Mapped[str | None] = mapped_column(String(3), nullable=True)
+    return_destination: Mapped[str | None] = mapped_column(String(3), nullable=True)
     cabin_class: Mapped[str] = mapped_column(String, default="economy", nullable=False)
     target_price_usd: Mapped[Decimal | None] = mapped_column(DECIMAL(10, 2), nullable=True)
     active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
