@@ -99,14 +99,26 @@ async def _scrape_route_async(origin: str, destination: str, departure_date: dat
     }
 
 
-@celery_app.task(name="app.workers.price_history_scraper.scrape_route")
+@celery_app.task(
+    name="app.workers.price_history_scraper.scrape_route",
+    autoretry_for=(Exception,),
+    retry_backoff=True,
+    retry_kwargs={"max_retries": 3},
+    acks_late=True,
+)
 def scrape_route(origin: str, destination: str, departure_date_iso: str) -> dict:
     """Scrape one (route, date) and record the cheapest. Sync wrapper for Celery."""
     departure_date = date.fromisoformat(departure_date_iso)
     return asyncio.run(_scrape_route_async(origin, destination, departure_date))
 
 
-@celery_app.task(name="app.workers.price_history_scraper.scrape_popular_routes")
+@celery_app.task(
+    name="app.workers.price_history_scraper.scrape_popular_routes",
+    autoretry_for=(Exception,),
+    retry_backoff=True,
+    retry_kwargs={"max_retries": 3},
+    acks_late=True,
+)
 def scrape_popular_routes() -> dict:
     """Scrape every (popular_route, sample_day) combination."""
     today = date.today()
